@@ -1,0 +1,695 @@
+{
+  "name": "wysee-md",
+  "displayName": "Wysee MD",
+  "description": "WYSIWYG-style Markdown custom editor for VS Code and VSCodium.",
+  "version": "0.9.0",
+  "publisher": "grainpool",
+  "author": {
+    "name": "Grainpool Holdings LLC"
+  },
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Formatters",
+    "Linters"
+  ],
+  "keywords": [
+    "markdown",
+    "wysiwyg",
+    "custom-editor",
+    "mermaid",
+    "spellcheck",
+    "print",
+    "pdf"
+  ],
+  "main": "./out/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Wysee MD requires local filesystem access and does not support virtual workspaces."
+    },
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Canvas rendering and source diagnostics are available in Restricted Mode. Print/PDF, workspace writes, and other external flows are disabled until the workspace is trusted.",
+      "restrictedConfigurations": [
+        "wyseeMd.pageProfile.active",
+        "wyseeMd.pageProfile.workspacePath",
+        "wyseeMd.theme.active",
+        "wyseeMd.theme.workspaceThemesPath",
+        "wyseeMd.spell.workspaceDictionaryPath",
+        "wyseeMd.print.browserFamily",
+        "wyseeMd.print.browserPath",
+        "wyseeMd.print.adapterOrder"
+      ]
+    }
+  },
+  "activationEvents": [
+    "onCustomEditor:grainpool.wysee-md.editor",
+    "onLanguage:markdown",
+    "onCommand:wyseeMd.print",
+    "onCommand:wyseeMd.exportPdf",
+    "onCommand:wyseeMd.exportHtml",
+    "onCommand:wyseeMd.theme.select",
+    "onCommand:wyseeMd.theme.saveCurrentAs",
+    "onCommand:wyseeMd.theme.manage",
+    "onCommand:wyseeMd.pageProfile.select",
+    "onCommand:wyseeMd.pageProfile.saveCurrentAs",
+    "onCommand:wyseeMd.pageProfile.manage",
+    "onCommand:wyseeMd.preview.toggleEditable",
+    "onCommand:wyseeMd.source.openToSide",
+    "onCommand:wyseeMd.editor.restoreBuiltInDefault",
+    "onCommand:wyseeMd.insertBlock.openMenu",
+    "onCommand:wyseeMd.insertBlock.heading1",
+    "onCommand:wyseeMd.insertBlock.heading2",
+    "onCommand:wyseeMd.insertBlock.link",
+    "onCommand:wyseeMd.insertBlock.image",
+    "onCommand:wyseeMd.insertBlock.quote",
+    "onCommand:wyseeMd.insertBlock.codeFence",
+    "onCommand:wyseeMd.insertBlock.hr",
+    "onCommand:wyseeMd.insertBlock.table2x2",
+    "onCommand:wyseeMd.insertBlock.tableAligned",
+    "onCommand:wyseeMd.insertBlock.tableCustom",
+    "onCommand:wyseeMd.insertBlock.taskList",
+    "onCommand:wyseeMd.insertBlock.mermaidFence",
+    "onCommand:wyseeMd.spell.addToUserDictionary",
+    "onCommand:wyseeMd.spell.addToWorkspaceDictionary",
+    "onCommand:wyseeMd.spell.ignoreWordSession",
+    "onCommand:wyseeMd.spell.ignoreWordDocument",
+    "onCommand:wyseeMd.spell.nextIssue",
+    "onCommand:wyseeMd.spell.previousIssue",
+    "onCommand:wyseeMd.dev.openLog",
+    "onCommand:wyseeMd.dev.inspectContext",
+    "onCommand:wyseeMd.dev.runSelfCheck",
+    "onCommand:wyseeMd.insertBlock.heading3",
+    "onCommand:wyseeMd.insertBlock.heading4",
+    "onCommand:wyseeMd.insertBlock.heading5",
+    "onCommand:wyseeMd.insertBlock.heading6",
+    "onCommand:wyseeMd.insertBlock.footnote"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "grainpool.wysee-md.editor",
+        "displayName": "Wysee MD",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          },
+          {
+            "filenamePattern": "*.markdown"
+          },
+          {
+            "filenamePattern": "*.mdown"
+          },
+          {
+            "filenamePattern": "*.mkdn"
+          },
+          {
+            "filenamePattern": "*.mkd"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "wyseeMd.print",
+        "title": "Print",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.exportPdf",
+        "title": "Save PDF",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.exportHtml",
+        "title": "Export HTML",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.theme.select",
+        "title": "Style…",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.theme.saveCurrentAs",
+        "title": "Save Current Style As…",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.theme.manage",
+        "title": "Manage Style JSON",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.pageProfile.select",
+        "title": "Page Profile…",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.pageProfile.saveCurrentAs",
+        "title": "Save Current Page Profile As…",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.pageProfile.manage",
+        "title": "Manage Page Profile JSON",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.preview.toggleEditable",
+        "title": "Toggle Editable Preview",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.source.openToSide",
+        "title": "Source",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.editor.restoreBuiltInDefault",
+        "title": "Restore Built-in Markdown Editor",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.openMenu",
+        "title": "Insert MD block…",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.link",
+        "title": "Link",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.image",
+        "title": "Image",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.quote",
+        "title": "Quote",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.codeFence",
+        "title": "Code Fence",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.hr",
+        "title": "Horizontal Rule",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.table2x2",
+        "title": "Table 2x2",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.tableAligned",
+        "title": "Table with alignment row",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.tableCustom",
+        "title": "Table MxN",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.taskList",
+        "title": "Task List",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.mermaidFence",
+        "title": "Mermaid Fence",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.spell.addToUserDictionary",
+        "title": "Add to User Dictionary",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.spell.addToWorkspaceDictionary",
+        "title": "Add to Workspace Dictionary",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.spell.ignoreWordSession",
+        "title": "Ignore Word in Session",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.spell.ignoreWordDocument",
+        "title": "Ignore Word in Document",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.spell.nextIssue",
+        "title": "Next Spelling Issue",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.spell.previousIssue",
+        "title": "Previous Spelling Issue",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.dev.openLog",
+        "title": "Open Log",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.dev.inspectContext",
+        "title": "Inspect Context",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.dev.runSelfCheck",
+        "title": "Run Self Check",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.heading3",
+        "title": "Heading 3",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.heading4",
+        "title": "Heading 4",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.heading5",
+        "title": "Heading 5",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.heading6",
+        "title": "Heading 6",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.heading1",
+        "title": "Heading 1",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.heading2",
+        "title": "Heading 2",
+        "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.insertBlock.footnote",
+        "title": "Footnote",
+        "category": "Wysee MD"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "wyseeMd.insertBlock",
+        "label": "Insert MD block…"
+      },
+      {
+        "id": "wyseeMd.insertBlock.headings",
+        "label": "Heading"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "wyseeMd.print",
+          "when": "activeCustomEditorId == grainpool.wysee-md.editor",
+          "group": "navigation@1"
+        },
+        {
+          "command": "wyseeMd.exportPdf",
+          "when": "activeCustomEditorId == grainpool.wysee-md.editor && wyseeMd.browserPrintAvailable",
+          "group": "navigation@2"
+        },
+        {
+          "command": "wyseeMd.theme.select",
+          "when": "activeCustomEditorId == grainpool.wysee-md.editor",
+          "group": "navigation@3"
+        },
+        {
+          "command": "wyseeMd.source.openToSide",
+          "when": "activeCustomEditorId == grainpool.wysee-md.editor",
+          "group": "navigation@4"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "wyseeMd.insertBlock",
+          "when": "resourceLangId == markdown",
+          "group": "wysee@1"
+        }
+      ],
+      "webview/context": [
+        {
+          "submenu": "wyseeMd.insertBlock",
+          "when": "webviewId == grainpool.wysee-md.editor && wyseeMd.canInsertBlock",
+          "group": "wysee@1"
+        },
+        {
+          "command": "wyseeMd.spell.addToUserDictionary",
+          "when": "webviewId == grainpool.wysee-md.editor && wyseeMd.spellMisspelled",
+          "group": "wyseeSpell@1"
+        },
+        {
+          "command": "wyseeMd.spell.addToWorkspaceDictionary",
+          "when": "webviewId == grainpool.wysee-md.editor && wyseeMd.spellMisspelled",
+          "group": "wyseeSpell@2"
+        },
+        {
+          "command": "wyseeMd.spell.ignoreWordSession",
+          "when": "webviewId == grainpool.wysee-md.editor && wyseeMd.spellMisspelled",
+          "group": "wyseeSpell@3"
+        },
+        {
+          "command": "wyseeMd.spell.ignoreWordDocument",
+          "when": "webviewId == grainpool.wysee-md.editor && wyseeMd.spellMisspelled",
+          "group": "wyseeSpell@4"
+        }
+      ],
+      "wyseeMd.insertBlock": [
+        {
+          "submenu": "wyseeMd.insertBlock.headings",
+          "group": "1_basic"
+        },
+        {
+          "command": "wyseeMd.insertBlock.link",
+          "group": "1_basic"
+        },
+        {
+          "command": "wyseeMd.insertBlock.image",
+          "group": "1_basic"
+        },
+        {
+          "command": "wyseeMd.insertBlock.quote",
+          "group": "1_basic"
+        },
+        {
+          "command": "wyseeMd.insertBlock.footnote",
+          "group": "1_basic"
+        },
+        {
+          "command": "wyseeMd.insertBlock.codeFence",
+          "group": "2_structured"
+        },
+        {
+          "command": "wyseeMd.insertBlock.mermaidFence",
+          "group": "2_structured"
+        },
+        {
+          "command": "wyseeMd.insertBlock.taskList",
+          "group": "2_structured"
+        },
+        {
+          "command": "wyseeMd.insertBlock.hr",
+          "group": "2_structured"
+        },
+        {
+          "command": "wyseeMd.insertBlock.table2x2",
+          "group": "3_tables"
+        },
+        {
+          "command": "wyseeMd.insertBlock.tableAligned",
+          "group": "3_tables"
+        },
+        {
+          "command": "wyseeMd.insertBlock.tableCustom",
+          "group": "3_tables"
+        }
+      ],
+      "wyseeMd.insertBlock.headings": [
+        {
+          "command": "wyseeMd.insertBlock.heading1",
+          "group": "1_headings"
+        },
+        {
+          "command": "wyseeMd.insertBlock.heading2",
+          "group": "1_headings"
+        },
+        {
+          "command": "wyseeMd.insertBlock.heading3",
+          "group": "1_headings"
+        },
+        {
+          "command": "wyseeMd.insertBlock.heading4",
+          "group": "1_headings"
+        },
+        {
+          "command": "wyseeMd.insertBlock.heading5",
+          "group": "1_headings"
+        },
+        {
+          "command": "wyseeMd.insertBlock.heading6",
+          "group": "1_headings"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Wysee MD",
+      "properties": {
+        "wyseeMd.editor.defaultForMarkdown": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use Wysee MD as the default editor for supported Markdown file patterns."
+        },
+        "wyseeMd.editor.writeUserAssociationOnFirstRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Merge Wysee MD editor associations into workbench.editorAssociations on first activation without overwriting existing associations."
+        },
+        "wyseeMd.preview.editable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow block overlay editing inside the Wysee canvas."
+        },
+        "wyseeMd.preview.commitOnBlur": {
+          "type": "boolean",
+          "default": false,
+          "description": "Commit overlay edits when the editor loses focus."
+        },
+        "wyseeMd.preview.insertRelativeToBlock": {
+          "type": "string",
+          "enum": [
+            "before",
+            "after"
+          ],
+          "default": "after",
+          "description": "Default relative insertion position for preview/canvas block insert commands."
+        },
+        "wyseeMd.spell.language": {
+          "type": "string",
+          "default": "en-US",
+          "description": "Spellcheck language identifier."
+        },
+        "wyseeMd.spell.workspaceDictionaryPath": {
+          "type": "string",
+          "default": ".vscode/wysee-md/dictionary.txt",
+          "description": "Workspace-relative spell dictionary path."
+        },
+        "wyseeMd.spell.ignoreInlineCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ignore inline code spans during spellcheck."
+        },
+        "wyseeMd.spell.ignoreCodeBlocks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ignore fenced and indented code blocks during spellcheck."
+        },
+        "wyseeMd.spell.ignoreMermaid": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ignore Mermaid fences during spellcheck."
+        },
+        "wyseeMd.export.html.selfContained": {
+          "type": "boolean",
+          "default": false,
+          "description": "Inline assets into exported HTML when possible."
+        },
+        "wyseeMd.export.pdf.mode": {
+          "type": "string",
+          "enum": [
+            "browserDialog"
+          ],
+          "default": "browserDialog",
+          "description": "PDF export mode."
+        },
+        "wyseeMd.print.browserFamily": {
+          "type": "string",
+          "enum": [
+            "system",
+            "chrome",
+            "edge",
+            "firefox",
+            "safari"
+          ],
+          "default": "system",
+          "description": "Preferred browser family for print/PDF handoff."
+        },
+        "wyseeMd.print.browserPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional explicit browser executable path for managed print adapters."
+        },
+        "wyseeMd.print.adapterOrder": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "configuredBrowser",
+              "systemBrowser",
+              "osOpen"
+            ]
+          },
+          "default": [
+            "configuredBrowser",
+            "systemBrowser",
+            "osOpen"
+          ],
+          "description": "Browser adapter resolution order for print/PDF handoff."
+        },
+        "wyseeMd.print.autoPrint": {
+          "type": "boolean",
+          "default": true,
+          "description": "Attempt to trigger the browser print dialog automatically once the print page is ready."
+        },
+        "wyseeMd.print.autoCloseManagedWindow": {
+          "type": "boolean",
+          "default": true,
+          "description": "Best-effort auto-close for managed browser windows after printing."
+        },
+        "wyseeMd.trace.level": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug",
+            "trace"
+          ],
+          "default": "info",
+          "description": "Wysee MD trace verbosity."
+        },
+        "wyseeMd.style.active": {
+          "type": "string",
+          "default": "__match-editor",
+          "description": "Active document style id."
+        },
+        "wyseeMd.printProfile.active": {
+          "type": "string",
+          "default": "__default-pdf",
+          "description": "Active print/PDF profile id."
+        },
+        "wyseeMd.preview.syncScroll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable bidirectional scroll synchronization between the WYSIWYG view and the source editor."
+        },
+        "wyseeMd.preview.copyMode": {
+          "type": "string",
+          "enum": [
+            "plainText",
+            "sourceMarkdown"
+          ],
+          "default": "plainText",
+          "description": "When copying from the WYSIWYG canvas, copy plain text (default) or the source Markdown."
+        },
+        "wyseeMd.preview.syntaxHighlight": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable language-specific syntax highlighting in fenced code blocks."
+        },
+        "wyseeMd.syntaxStyle.active": {
+          "type": "string",
+          "default": "__match-editor-syntax",
+          "description": "Active syntax highlighting style. Use the Style panel to browse and switch syntax themes."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "wyseeMd.preview.toggleEditable",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "activeCustomEditorId == grainpool.wysee-md.editor"
+      },
+      {
+        "command": "wyseeMd.spell.nextIssue",
+        "key": "f8",
+        "when": "resourceLangId == markdown"
+      },
+      {
+        "command": "wyseeMd.spell.previousIssue",
+        "key": "shift+f8",
+        "when": "resourceLangId == markdown"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "/.vscode/wysee-md/themes/*.json",
+        "url": "./schemas/theme-profile.schema.json"
+      },
+      {
+        "fileMatch": "/.vscode/wysee-md/page-profiles/*.json",
+        "url": "./schemas/page-profile.schema.json"
+      }
+    ]
+  },
+  "scripts": {
+    "clean": "rimraf out dist *.vsix",
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "lint": "eslint src --ext .ts",
+    "test": "npm run compile && mocha --require ./test/setup.js --require ts-node/register/transpile-only test/**/*.test.ts",
+    "package": "vsce package --allow-star-activation --allow-missing-repository",
+    "package:ovsx": "npx ovsx package",
+    "publish:openvsx": "npx ovsx publish",
+    "publish:marketplace": "vsce publish --allow-missing-repository"
+  },
+  "dependencies": {
+    "katex": "^0.16.22",
+    "linkedom": "^0.18.12",
+    "markdown-it": "^14.1.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "mermaid": "^11.12.0",
+    "sanitize-html": "^2.17.0",
+    "word-list": "^4.1.0",
+    "yaml": "^2.8.1",
+    "highlight.js": "^11.9.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.15.30",
+    "@types/sanitize-html": "^2.16.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.7.1",
+    "mocha": "^11.7.1",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grainpool/wysee-md"
+  },
+  "homepage": "https://github.com/grainpool/wysee-md#readme",
+  "bugs": {
+    "url": "https://github.com/grainpool/wysee-md/issues"
+  }
+}

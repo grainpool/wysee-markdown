@@ -1,0 +1,156 @@
+:root { color-scheme: light dark; }
+body { margin: 0; padding: 0; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); font-family: var(--vscode-font-family); }
+
+/* Sync scroll bar */
+.wysee-sync-bar {
+  position: sticky; top: 0; z-index: 18;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: .25rem .75rem;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: .82rem; color: var(--vscode-descriptionForeground);
+}
+.wysee-sync-bar label { display: flex; align-items: center; gap: .35rem; cursor: pointer; user-select: none; }
+.wysee-sync-bar input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
+
+/* Root */
+.wysee-root { padding: .75rem 1rem 2rem; position: relative; }
+
+/* Blocks */
+.wysee-block { position: relative; margin: .2rem 0; border-radius: 6px; }
+.wysee-block.is-hovered { outline: 1px dashed rgba(127,127,127,.35); outline-offset: 2px; }
+.wysee-block.is-selected { outline: 2px solid var(--vscode-focusBorder); outline-offset: 2px; }
+.wysee-block[data-wysee-kind="listItem"] ul,
+.wysee-block[data-wysee-kind="listItem"] ol { margin: 0; }
+
+/* ── Boundary (+) affordance ── */
+.wysee-boundary {
+  position: relative; height: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wysee-boundary.has-panel {
+  height: auto;
+  display: block;
+}
+.wysee-boundary-line {
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 2px; background: var(--vscode-focusBorder);
+  opacity: 0; transition: opacity .12s; pointer-events: none;
+}
+.wysee-boundary-plus {
+  position: relative; z-index: 11;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+  border: none; font-size: 18px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; opacity: 0; transition: opacity .12s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+/* First boundary: always visible */
+.wysee-boundary.is-first .wysee-boundary-plus { opacity: 1; }
+.wysee-boundary.is-first .wysee-boundary-line { opacity: 0; }
+/* Reveal on hover of the block above */
+.wysee-boundary.is-revealed .wysee-boundary-plus { opacity: 1; }
+.wysee-boundary.is-revealed .wysee-boundary-line { opacity: .45; }
+/* Active panel state */
+.wysee-boundary.has-panel .wysee-boundary-plus { display: none; }
+.wysee-boundary.has-panel .wysee-boundary-line { opacity: 0; }
+
+/* ── Inline editor panel (insert & edit) ── */
+.wysee-editor-panel {
+  margin: .35rem 0; border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px; overflow: hidden;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-foreground);
+}
+.wysee-editor-split { display: flex; min-height: 200px; }
+.wysee-editor-input-wrap {
+  flex: 1; display: flex; border-right: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-input-background);
+}
+.wysee-editor-gutter {
+  width: 2.8rem; flex-shrink: 0; padding: .55rem 0;
+  text-align: right; user-select: none;
+  font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size, .88rem);
+  line-height: 1.5; color: var(--vscode-editorLineNumber-foreground, rgba(127,127,127,.55));
+  overflow: hidden;
+}
+.wysee-editor-gutter span { display: block; padding-right: .45rem; }
+.wysee-editor-input-wrap textarea {
+  flex: 1; resize: none; border: none; outline: none; padding: .55rem .55rem .55rem .35rem;
+  font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size, .88rem);
+  line-height: 1.5; tab-size: 2;
+  color: var(--vscode-input-foreground, var(--vscode-foreground));
+  background: transparent;
+}
+.wysee-editor-preview {
+  flex: 1; padding: .55rem .75rem; overflow-y: auto;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+.wysee-editor-preview-empty { opacity: .45; font-style: italic; }
+.wysee-editor-actions {
+  display: flex; gap: .4rem; padding: .3rem .55rem;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editor-background);
+  align-items: center;
+}
+.wysee-editor-actions button {
+  font: inherit; font-size: .88rem; border: none; border-radius: 3px;
+  padding: .25rem .6rem; cursor: pointer;
+}
+.wysee-editor-actions .confirm {
+  background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+}
+.wysee-editor-actions .cancel {
+  background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
+}
+.wysee-editor-actions .hint {
+  margin-left: auto;
+  font-size: .78rem; color: var(--vscode-descriptionForeground);
+}
+
+/* ── Overlay host (kept for errors only) ── */
+#wysee-overlay-host { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+
+/* Spell — use background-image SVG wave (text-decoration: wavy fails in VS Code webviews) */
+span[data-wysee-spell="misspelled"] {
+  cursor: context-menu;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3' viewBox='0 0 6 3'%3E%3Cpath d='M0 2.5 Q1.5 0 3 2.5 Q4.5 5 6 2.5' fill='none' stroke='%23e51400' stroke-width='0.8'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: bottom left;
+  background-size: 6px 3px;
+  padding-bottom: 2px;
+}
+
+/* Code blocks: strip per-line background from <code> inside <pre> (inline code keeps its bg) */
+.wysee-block pre code {
+  background: transparent !important;
+  padding: 0;
+}
+.wysee-block pre {
+  padding: .75em 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+/* Mermaid / Math */
+.wysee-mermaid-source { display: none !important; }
+.wysee-math-error { color: var(--vscode-errorForeground, #f44); font-size: .85rem; }
+.wysee-math[data-wysee-math-display="block"] { text-align: center; margin: .75rem 0; overflow-x: auto; }
+
+/* Syntax highlighting is handled by syntax style profiles (injected dynamically) */
+
+/* Footnotes */
+.wysee-block-footnoteDefinition { display: none; }
+.wysee-block-footnotes { pointer-events: auto; }
+.wysee-block-footnotes hr { margin: 1.5em 0 .5em 0; border: none; border-top: 1px solid var(--vscode-panel-border); }
+.wysee-block-footnotes .wysee-footnotes-list { padding-left: 1.5em; font-size: .9em; margin: .5em 0; }
+.wysee-block-footnotes .wysee-footnotes-list li { margin-bottom: .3em; }
+.wysee-footnote-ref a { text-decoration: none; color: var(--vscode-textLink-foreground, #0366d6); }
+.wysee-footnote-backref { text-decoration: none; margin-left: .3em; font-size: .85em; }
+
+/* Strikethrough */
+.wysee-block s, .wysee-block del { text-decoration: line-through; opacity: .7; }

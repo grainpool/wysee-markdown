@@ -1,0 +1,246 @@
+import * as vscode from 'vscode';
+
+export interface BlockMapEntry {
+  blockId: string;
+  uri: string;
+  version: number;
+  kind: string;
+  startLine: number;
+  endLine: number;
+  startOffset: number;
+  endOffset: number;
+  ordinal: number;
+  raw: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface StyleProfile {
+  id: string;
+  name: string;
+  builtIn?: boolean;
+  syntaxStyle?: string;
+  baseStyles: string;
+  elementStyles: Partial<Record<StyleElementKey, string>>;
+}
+
+export type StyleElementKey =
+  | 'p' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+  | 'ul' | 'ol' | 'li' | 'blockquote' | 'hr'
+  | 'table' | 'thead' | 'tbody' | 'th' | 'td'
+  | 'tableHeaderRow' | 'tableOddRow' | 'tableEvenRow'
+  | 'tableOddColumnCell' | 'tableEvenColumnCell'
+  | 'codeInline' | 'codeBlock' | 'pre'
+  | 'img' | 'a' | 'taskCheckbox' | 'mermaid';
+
+export const STYLE_ELEMENT_KEYS: StyleElementKey[] = [
+  'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'blockquote', 'hr',
+  'table', 'thead', 'tbody', 'th', 'td',
+  'tableHeaderRow', 'tableOddRow', 'tableEvenRow',
+  'tableOddColumnCell', 'tableEvenColumnCell',
+  'codeInline', 'codeBlock', 'pre',
+  'img', 'a', 'taskCheckbox', 'mermaid',
+];
+
+export interface PrintProfile {
+  id: string;
+  name: string;
+  builtIn?: boolean;
+  printStyle?: string;
+  format: 'Letter' | 'Legal' | 'A4' | 'A5' | 'Tabloid' | 'Custom';
+  width?: string;
+  height?: string;
+  landscape: boolean;
+  marginTop: string;
+  marginRight: string;
+  marginBottom: string;
+  marginLeft: string;
+  mirrorMargins?: boolean;
+  codeBlocks?: { wrap: boolean };
+  images?: { defaultAlign?: 'left' | 'center' | 'right'; maxWidth?: string };
+  pageNumbers?: {
+    enabled: boolean;
+    style?: 'decimal' | 'i' | 'I' | 'a' | 'A';
+    position?: 'left' | 'center' | 'right';
+    startAt?: number;
+    suppressFirstPage?: boolean;
+  };
+}
+
+/** @deprecated Alias kept during migration — will be removed. */
+export type ThemeProfile = StyleProfile & { selectorStyles: Record<string, string>; previewOnlyStyles?: Record<string, string>; printOnlyStyles?: Record<string, string>; exportClassName?: string; pageProfileId?: string };
+/** @deprecated Alias kept during migration — will be removed. */
+export type PageProfile = PrintProfile;
+
+export interface PreviewSessionState {
+  sessionId: string;
+  uri: string;
+  documentVersion: number;
+  focusedBlockId?: string;
+  focusedBlockKind?: string;
+  contextBlockId?: string;
+  contextBlockKind?: string;
+  contextWord?: string;
+  hasSelection: boolean;
+  selectionText?: string;
+  lastContextMenuAt?: number;
+  scrollTopLine?: number;
+  editPanelActive?: boolean;
+}
+
+export interface SpellDiagnostic {
+  word: string;
+  range: vscode.Range;
+  suggestions: string[];
+  source: 'spell';
+}
+
+export interface SpellResult {
+  diagnostics: SpellDiagnostic[];
+  sessionIgnoreWords: string[];
+  documentIgnoreWords: string[];
+}
+
+export interface RenderedBlockModel {
+  blockId: string;
+  kind: string;
+  startLine: number;
+  endLine: number;
+  raw: string;
+  plainText: string;
+  html: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface RenderViewModel {
+  uri: string;
+  version: number;
+  title: string;
+  html: string;
+  themeCss: string;
+  previewCss: string;
+  pageCss: string;
+  blocks: Record<string, RenderedBlockModel>;
+  blockMap: BlockMapEntry[];
+  activeThemeId: string;
+  activePageProfileId: string;
+  editable: boolean;
+  commitOnBlur: boolean;
+  trusted: boolean;
+  copyMode: 'plainText' | 'sourceMarkdown';
+  syntaxCss: string;
+}
+
+export interface BlockEditPayload {
+  blockId: string;
+  documentVersion: number;
+  editKind: 'text' | 'raw' | 'link' | 'image' | 'tableCell';
+  value?: string;
+  text?: string;
+  url?: string;
+  alt?: string;
+  src?: string;
+  width?: string;
+  align?: string;
+  occurrenceIndex?: number;
+  row?: number;
+  col?: number;
+}
+
+export interface InsertTarget {
+  uri: vscode.Uri;
+  selection?: vscode.Selection;
+  blockId?: string;
+}
+
+export type InsertAnchor = 'before' | 'after';
+
+export interface PrintBundleAsset {
+  route: string;
+  contentType: string;
+  body: Buffer | string;
+}
+
+export interface PrintBundle {
+  jobId: string;
+  token: string;
+  title: string;
+  html: string;
+  css: string;
+  js: string;
+  assets: PrintBundleAsset[];
+  pageProfileId: string;
+  themeId: string;
+}
+
+export interface BrowserLaunchResult {
+  adapter: string;
+  launched: boolean;
+  detail?: string;
+}
+
+export interface WyseeErrorShape {
+  code: string;
+  component: 'editor' | 'render' | 'spell' | 'theme' | 'print' | 'export' | 'security' | 'context';
+  message: string;
+  details?: Record<string, unknown>;
+  remediation?: string;
+  cause?: unknown;
+  sessionId?: string;
+  uri?: string;
+}
+
+export interface SelfCheckReportItem {
+  name: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface SelfCheckReport {
+  ok: boolean;
+  items: SelfCheckReportItem[];
+}
+
+// ── Syntax Style Profiles ────────────────────────────────────
+
+export type SyntaxTokenKey =
+  | 'keyword' | 'builtIn' | 'type' | 'literal'
+  | 'string' | 'regexp' | 'number' | 'variable'
+  | 'operator' | 'punctuation' | 'property'
+  | 'comment' | 'doctag'
+  | 'function' | 'title' | 'titleClass' | 'params'
+  | 'attr' | 'attribute' | 'selector' | 'selectorAttr' | 'selectorPseudo'
+  | 'tag' | 'name'
+  | 'meta' | 'symbol' | 'bullet' | 'link'
+  | 'subst' | 'code' | 'formula'
+  | 'variableLanguage' | 'variableConstant' | 'charEscape'
+  | 'addition' | 'deletion' | 'emphasis' | 'strong';
+
+export const SYNTAX_TOKEN_KEYS: SyntaxTokenKey[] = [
+  'keyword', 'builtIn', 'type', 'literal',
+  'string', 'regexp', 'number', 'variable',
+  'operator', 'punctuation', 'property',
+  'comment', 'doctag',
+  'function', 'title', 'titleClass', 'params',
+  'attr', 'attribute', 'selector', 'selectorAttr', 'selectorPseudo',
+  'tag', 'name',
+  'meta', 'symbol', 'bullet', 'link',
+  'subst', 'code', 'formula',
+  'variableLanguage', 'variableConstant', 'charEscape',
+  'addition', 'deletion', 'emphasis', 'strong',
+];
+
+export interface SyntaxLanguageStyle {
+  highlight?: boolean;
+  [token: string]: string | boolean | undefined;
+}
+
+export interface SyntaxStyleProfile {
+  id: string;
+  name: string;
+  builtIn?: boolean;
+  syntaxStyles: {
+    default?: SyntaxLanguageStyle;
+    [language: string]: SyntaxLanguageStyle | undefined;
+  };
+}

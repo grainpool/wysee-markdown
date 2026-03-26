@@ -1,0 +1,15 @@
+src/**
+test/**
+.vscode/**
+.git/**
+.gitignore
+.github/**
+*.ts
+!*.d.ts
+tsconfig.json
+package-lock.json
+node_modules/.package-lock.json
+**/*.map
+CHANGELOG-dev.md
+.eslintrc*
+.prettierrc*

@@ -1,0 +1,4 @@
+Copyright (c) 2026 Grainpool Holdings LLC.
+All rights reserved.
+
+This software and accompanying files are provided for evaluation and internal development use only unless Grainpool Holdings LLC grants separate written permission.
