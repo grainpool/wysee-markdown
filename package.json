@@ -135,12 +135,12 @@
       },
       {
         "command": "wyseeMd.theme.select",
-        "title": "Style…",
+        "title": "Style\u2026",
         "category": "Wysee MD"
       },
       {
         "command": "wyseeMd.theme.saveCurrentAs",
-        "title": "Save Current Style As…",
+        "title": "Save Current Style As\u2026",
         "category": "Wysee MD"
       },
       {
@@ -150,12 +150,12 @@
       },
       {
         "command": "wyseeMd.pageProfile.select",
-        "title": "Page Profile…",
+        "title": "Page Profile\u2026",
         "category": "Wysee MD"
       },
       {
         "command": "wyseeMd.pageProfile.saveCurrentAs",
-        "title": "Save Current Page Profile As…",
+        "title": "Save Current Page Profile As\u2026",
         "category": "Wysee MD"
       },
       {
@@ -180,7 +180,7 @@
       },
       {
         "command": "wyseeMd.insertBlock.openMenu",
-        "title": "Insert MD block…",
+        "title": "Insert MD block\u2026",
         "category": "Wysee MD"
       },
       {
@@ -312,12 +312,17 @@
         "command": "wyseeMd.insertBlock.footnote",
         "title": "Footnote",
         "category": "Wysee MD"
+      },
+      {
+        "command": "wyseeMd.openWithWysee",
+        "title": "Open with Wysee",
+        "icon": "$(notebook-render-output)"
       }
     ],
     "submenus": [
       {
         "id": "wyseeMd.insertBlock",
-        "label": "Insert MD block…"
+        "label": "Insert MD block\u2026"
       },
       {
         "id": "wyseeMd.insertBlock.headings",
@@ -456,6 +461,20 @@
           "command": "wyseeMd.insertBlock.heading6",
           "group": "1_headings"
         }
+      ],
+      "explorer/context": [
+        {
+          "command": "wyseeMd.openWithWysee",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@99"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "wyseeMd.openWithWysee",
+          "when": "resourceLangId == markdown",
+          "group": "navigation@99"
+        }
       ]
     },
     "configuration": {
@@ -490,6 +509,13 @@
           ],
           "default": "after",
           "description": "Default relative insertion position for preview/canvas block insert commands."
+        },
+        "wyseeMd.preview.statsSectionDepth": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 6,
+          "description": "Heading depth used for the \u201cword count by section\u201d stats view. 1 means H1 sections, 6 means include H1-H6."
         },
         "wyseeMd.spell.language": {
           "type": "string",

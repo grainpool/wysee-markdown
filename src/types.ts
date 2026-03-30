@@ -101,6 +101,116 @@ export interface SpellResult {
   documentIgnoreWords: string[];
 }
 
+
+export interface SectionWordCount {
+  heading: string;
+  level: number;
+  wordCount: number;
+  blockId: string;
+  startLine: number;
+}
+
+export interface DanglingReferenceIssue {
+  id: string;
+  kind: 'image' | 'link' | 'footnote' | 'reference';
+  message: string;
+  snippet: string;
+  blockId: string;
+  relativeStart: number;
+  relativeEnd: number;
+  line: number;
+}
+
+export interface DocumentStats {
+  wordCount: number;
+  readingTimeMinutes: number;
+  characterCountPlainText: number;
+  characterCountNoSpaces: number;
+  characterCountWithMarkup: number;
+  paragraphCount: number;
+  tableCount: number;
+  imageCount: number;
+  diagramCount: number;
+  codeBlockLineCount: number;
+  sectionDepth: number;
+  sections: SectionWordCount[];
+  danglingReferenceCount: number;
+  danglingIssues: DanglingReferenceIssue[];
+}
+
+export interface DiffInlineRange {
+  start: number;
+  end: number;
+  tone: 'added' | 'removed' | 'modified';
+}
+
+export interface DiffBlockDecoration {
+  state: 'unchanged' | 'modified' | 'added' | 'deleted';
+  counterpartBlockId?: string;
+  inlineRanges?: DiffInlineRange[];
+  groupId?: string;
+  groupPosition?: 'single' | 'start' | 'middle' | 'end';
+}
+
+export interface DiffPlaceholderPresentation {
+  id: string;
+  kind: 'added' | 'deleted';
+  beforeBlockId?: string | null;
+  lineCount: number;
+  blockCount: number;
+  groupId?: string;
+}
+
+export interface DiffDeletionMarkerPresentation {
+  id: string;
+  beforeBlockId?: string | null;
+  lineCount: number;
+  groupId?: string;
+}
+
+export interface DiffHunk {
+  id: string;
+  index: number;
+  kind: 'added' | 'deleted' | 'modified' | 'mixed';
+  /** Anchor blockId or placeholder ID on this side */
+  anchorId: string;
+  /** Corresponding groupId used by blocks/placeholders */
+  groupId: string;
+}
+
+export interface DiffUnchangedRun {
+  id: string;
+  /** Block IDs in this unchanged region */
+  blockIds: string[];
+  /** Number of blocks */
+  blockCount: number;
+  /** Whether this run is collapsible (large enough) */
+  collapsible: boolean;
+  /** Block ID of the first block in the run */
+  firstBlockId: string;
+  /** Block ID of the last block in the run */
+  lastBlockId: string;
+}
+
+export interface DiffViewPresentation {
+  mode: 'none' | 'git' | 'diff';
+  side?: 'original' | 'modified';
+  comparisonLabel?: string;
+  readOnly?: boolean;
+  firstAnchorId?: string;
+  conflict?: boolean;
+  blocks: Record<string, DiffBlockDecoration>;
+  placeholders: DiffPlaceholderPresentation[];
+  deletionMarkers: DiffDeletionMarkerPresentation[];
+  hunks: DiffHunk[];
+  unchangedRuns: DiffUnchangedRun[];
+  summary: {
+    added: number;
+    deleted: number;
+    modified: number;
+  };
+}
+
 export interface RenderedBlockModel {
   blockId: string;
   kind: string;
@@ -129,6 +239,8 @@ export interface RenderViewModel {
   trusted: boolean;
   copyMode: 'plainText' | 'sourceMarkdown';
   syntaxCss: string;
+  stats?: DocumentStats;
+  diff?: DiffViewPresentation;
 }
 
 export interface BlockEditPayload {

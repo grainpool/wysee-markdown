@@ -1,3 +1,4 @@
+import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
@@ -9,13 +10,16 @@ import { buildFootnoteRegistryFromText, resolveFootnoteReferences, renderFootnot
 import { renderMermaidBlock } from '../render/mermaidTransform';
 import { BlockEditService } from '../source/blockEditService';
 import { ContextStateService } from './contextState';
-import { PreviewSessionState } from '../types';
+import { PreviewSessionState, RenderViewModel } from '../types';
 import { WyseeEditorSession } from './wyseeEditorSession';
 import { WebviewToExtensionMessage } from './webviewProtocol';
 import { SpellService } from '../spell/spellService';
 import { buildBlockMap } from '../render/blockMap';
+import { buildDocumentStats, clampHeadingDepth } from '../analysis/markdownStats';
 import { debounce } from '../util/debounce';
 import { escapeHtml } from '../util/strings';
+import { buildAllAddedPresentation, buildConflictPresentation, buildSideBySideDiffPresentations, buildWorkingTreeDiffPresentation } from '../diff/blockDiff';
+import { DiffTabContext, GitApiLike, GitRepositoryLike, getBackingFileUri, getGitApi, getResourceIdentityKey, isGitUriLike, resolveDiffTabContext, resolveGitWorkingTreeComparison, uriEquals } from '../diff/gitDiffContext';
 
 export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
   private readonly sessions = new Map<string, WyseeEditorSession>();
@@ -23,14 +27,18 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
   private readonly disposables: vscode.Disposable[] = [];
   private lastActiveSessionId?: string;
   private readonly debouncedRefresh = debounce((uri: string) => void this.refreshUri(vscode.Uri.parse(uri)), 120);
+  private readonly debouncedDiffContextReconcile = debounce(() => void this.reconcileDiffContexts(), 60);
   private syncScrollEnabled = true;
   private scrollDriver: 'none' | 'source' | 'webview' = 'none';
   private scrollDriverTimer?: ReturnType<typeof setTimeout>;
+  private gitApi?: GitApiLike;
+  private readonly wiredGitRepositories = new WeakSet<object>();
+  private pendingDiffScrollLine?: number;
 
   private claimScrollDriver(who: 'source' | 'webview') {
     this.scrollDriver = who;
     clearTimeout(this.scrollDriverTimer);
-    this.scrollDriverTimer = setTimeout(() => { this.scrollDriver = 'none'; }, 500);
+    this.scrollDriverTimer = setTimeout(() => { this.scrollDriver = 'none'; }, 100);
   }
   private readonly previewMd = (() => {
     let highlightFn: ((code: string, lang: string) => string) | undefined;
@@ -57,10 +65,17 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
     private readonly trace: TraceService,
   ) {
     this.syncScrollEnabled = vscode.workspace.getConfiguration('wyseeMd').get<boolean>('preview.syncScroll', true);
+    void this.initializeGitIntegration();
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (event.document.languageId !== 'markdown') { return; }
         this.debouncedRefresh(event.document.uri.toString());
+      }),
+      vscode.window.tabGroups.onDidChangeTabs(() => {
+        this.debouncedDiffContextReconcile();
+      }),
+      vscode.window.tabGroups.onDidChangeTabGroups(() => {
+        this.debouncedDiffContextReconcile();
       }),
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         void this.contextState.markMarkdownSourceActive(Boolean(editor && editor.document.languageId === 'markdown'));
@@ -103,6 +118,43 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
     );
   }
 
+  private async initializeGitIntegration(): Promise<void> {
+    this.gitApi = await getGitApi();
+    if (!this.gitApi) {
+      return;
+    }
+
+    for (const repository of this.gitApi.repositories ?? []) {
+      this.wireGitRepository(repository);
+    }
+
+    if (this.gitApi.onDidOpenRepository) {
+      this.disposables.push(this.gitApi.onDidOpenRepository((repository) => {
+        this.wireGitRepository(repository);
+        void this.refreshAll();
+      }));
+    }
+
+    if (this.gitApi.onDidCloseRepository) {
+      this.disposables.push(this.gitApi.onDidCloseRepository(() => {
+        void this.refreshAll();
+      }));
+    }
+
+    void this.refreshAll();
+  }
+
+  private wireGitRepository(repository: GitRepositoryLike): void {
+    const key = repository as unknown as object;
+    if (this.wiredGitRepositories.has(key)) {
+      return;
+    }
+    this.wiredGitRepositories.add(key);
+    this.disposables.push(repository.state.onDidChange(() => {
+      void this.refreshAll();
+    }));
+  }
+
   static register(
     context: vscode.ExtensionContext,
     renderer: MarkdownRenderer,
@@ -136,11 +188,12 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     this.trace.info('Resolve custom text editor', { uri: document.uri.toString() });
-    const sessionId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const createdAt = Date.now();
+    const sessionId = `${createdAt}-${Math.random().toString(16).slice(2)}`;
     const state: PreviewSessionState = {
       sessionId, uri: document.uri.toString(), documentVersion: document.version, hasSelection: false,
     };
-    const session: WyseeEditorSession = { sessionId, document, panel, state };
+    const session: WyseeEditorSession = { sessionId, createdAt, document, panel, state };
     this.sessions.set(sessionId, session);
     const bucket = this.sessionsByDocument.get(document.uri.toString()) ?? new Set<string>();
     bucket.add(sessionId);
@@ -159,19 +212,32 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
     };
     panel.webview.html = this.getHtml(panel.webview, sessionId);
 
+    this.applyResolvedSessionDiffContexts(this.resolveAllSessionDiffContexts());
+    this.debouncedDiffContextReconcile();
+
     panel.onDidDispose(() => {
       this.sessions.delete(sessionId);
       bucket.delete(sessionId);
       if (this.lastActiveSessionId === sessionId) {
         this.lastActiveSessionId = [...this.sessions.keys()].pop();
       }
-      void this.contextState.applySession(this.getActiveSession()?.state, this.isEditable(document.uri), this.browserPrintAvailable());
+      void this.reconcileDiffContexts();
+      void this.contextState.applySession(this.getActiveSession()?.state, this.isSessionEditable(this.getActiveSession()), this.browserPrintAvailable());
     }, null, this.context.subscriptions);
 
     panel.onDidChangeViewState(() => {
       if (panel.active) {
         this.lastActiveSessionId = sessionId;
-        void this.contextState.applySession(session.state, this.isEditable(document.uri), this.browserPrintAvailable());
+        const changedIds = this.applyResolvedSessionDiffContexts(this.resolveAllSessionDiffContexts());
+        if (changedIds.length) {
+          for (const changedId of changedIds) {
+            const changedSession = this.sessions.get(changedId);
+            if (changedSession) {
+              void this.refreshSession(changedSession);
+            }
+          }
+        }
+        void this.contextState.applySession(session.state, this.isSessionEditable(session), this.browserPrintAvailable());
       }
     }, null, this.context.subscriptions);
 
@@ -198,6 +264,330 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
     for (const session of this.sessions.values()) {
       await this.refreshSession(session);
     }
+  }
+
+  private resolveAllSessionDiffContexts(): Map<string, DiffTabContext | undefined> {
+    const contexts = new Map<string, DiffTabContext | undefined>();
+    const unresolvedSessions: WyseeEditorSession[] = [];
+
+    for (const session of this.sessions.values()) {
+      const explicitContext = resolveDiffTabContext(session.document.uri, session.panel.viewColumn);
+      if (explicitContext) {
+        contexts.set(session.sessionId, explicitContext);
+      } else {
+        unresolvedSessions.push(session);
+      }
+    }
+
+    const unresolvedGitSessions = unresolvedSessions.filter(session => isGitUriLike(session.document.uri));
+    const unresolvedFileSessions = unresolvedSessions.filter(session => session.document.uri.scheme === 'file');
+    const pairCandidates: Array<{ gitSession: WyseeEditorSession; fileSession: WyseeEditorSession; score: number }> = [];
+
+    for (const gitSession of unresolvedGitSessions) {
+      const gitKey = getResourceIdentityKey(gitSession.document.uri);
+      if (!gitKey) {
+        continue;
+      }
+      for (const fileSession of unresolvedFileSessions) {
+        const fileKey = getResourceIdentityKey(fileSession.document.uri);
+        if (!fileKey || fileKey !== gitKey) {
+          continue;
+        }
+        pairCandidates.push({ gitSession, fileSession, score: this.scoreGitFileSessionPair(gitSession, fileSession) });
+      }
+    }
+
+    pairCandidates.sort((left, right) => right.score - left.score
+      || right.fileSession.createdAt - left.fileSession.createdAt
+      || right.gitSession.createdAt - left.gitSession.createdAt);
+
+    const matchedGitSessions = new Set<string>();
+    const matchedFileSessions = new Set<string>();
+
+    for (const candidate of pairCandidates) {
+      if (matchedGitSessions.has(candidate.gitSession.sessionId) || matchedFileSessions.has(candidate.fileSession.sessionId)) {
+        continue;
+      }
+
+      matchedGitSessions.add(candidate.gitSession.sessionId);
+      matchedFileSessions.add(candidate.fileSession.sessionId);
+      contexts.set(candidate.gitSession.sessionId, {
+        side: 'original',
+        counterpartUri: candidate.fileSession.document.uri,
+        groupViewColumn: candidate.fileSession.panel.viewColumn,
+      });
+      contexts.set(candidate.fileSession.sessionId, {
+        side: 'modified',
+        counterpartUri: candidate.gitSession.document.uri,
+        groupViewColumn: candidate.gitSession.panel.viewColumn,
+      });
+    }
+
+    for (const gitSession of unresolvedGitSessions) {
+      if (matchedGitSessions.has(gitSession.sessionId)) {
+        continue;
+      }
+      const fallbackCounterpart = getBackingFileUri(gitSession.document.uri);
+      if (fallbackCounterpart) {
+        contexts.set(gitSession.sessionId, {
+          side: 'original',
+          counterpartUri: fallbackCounterpart,
+          groupViewColumn: gitSession.panel.viewColumn,
+        });
+      }
+    }
+
+    return contexts;
+  }
+
+  private scoreGitFileSessionPair(gitSession: WyseeEditorSession, fileSession: WyseeEditorSession): number {
+    let score = 0;
+
+    const gitBackingFile = getBackingFileUri(gitSession.document.uri);
+    if (uriEquals(gitBackingFile, fileSession.document.uri)) {
+      score += 300;
+    }
+    if (gitSession.panel.viewColumn === fileSession.panel.viewColumn) {
+      score += 120;
+    }
+    if (gitSession.panel.visible && fileSession.panel.visible) {
+      score += 220;
+    }
+    if (gitSession.panel.active) {
+      score += 30;
+    }
+    if (fileSession.panel.active) {
+      score += 30;
+    }
+
+    const createdDelta = Math.abs(gitSession.createdAt - fileSession.createdAt);
+    score += Math.max(0, 100 - Math.min(100, Math.floor(createdDelta / 100)));
+    return score;
+  }
+
+  private applyResolvedSessionDiffContexts(contexts: Map<string, DiffTabContext | undefined>): string[] {
+    const changedSessionIds: string[] = [];
+
+    for (const session of this.sessions.values()) {
+      const next = contexts.get(session.sessionId);
+      if (!this.sameDiffContext(session.diffContext, next)) {
+        this.trace.trace('Session diff context changed', {
+          sessionId: session.sessionId,
+          uri: session.document.uri.toString(),
+          previousSide: session.diffContext?.side,
+          nextSide: next?.side,
+          counterpart: next?.counterpartUri.toString(),
+        });
+        session.diffContext = next;
+        changedSessionIds.push(session.sessionId);
+      }
+    }
+
+    return changedSessionIds;
+  }
+
+  private async reconcileDiffContexts(): Promise<void> {
+    const changedSessionIds = this.applyResolvedSessionDiffContexts(this.resolveAllSessionDiffContexts());
+    if (!changedSessionIds.length) {
+      return;
+    }
+
+    const refreshes = changedSessionIds
+      .map(sessionId => this.sessions.get(sessionId))
+      .filter((session): session is WyseeEditorSession => Boolean(session))
+      .map(session => this.refreshSession(session));
+
+    await Promise.allSettled(refreshes);
+  }
+
+  private sameDiffContext(left: DiffTabContext | undefined, right: DiffTabContext | undefined): boolean {
+    return left?.side === right?.side && uriEquals(left?.counterpartUri, right?.counterpartUri);
+  }
+
+  private sanitizeDiffLayoutMeasurements(measurements: { groupId: string; height: number }[]): Record<string, number> {
+    const next: Record<string, number> = {};
+    for (const entry of measurements ?? []) {
+      if (!entry || typeof entry.groupId !== 'string' || !entry.groupId) {
+        continue;
+      }
+      const height = Math.round(Number(entry.height));
+      if (Number.isFinite(height) && height > 0) {
+        next[entry.groupId] = height;
+      }
+    }
+    return next;
+  }
+
+  private sanitizeViewportRatio(ratio: number | undefined): number | undefined {
+    const value = Number(ratio);
+    if (!Number.isFinite(value)) {
+      return undefined;
+    }
+    return Math.max(0, Math.min(1, value));
+  }
+
+  private broadcastSyncScrollSetting(): void {
+    for (const session of this.sessions.values()) {
+      session.panel.webview.postMessage({ type: 'setSyncScroll', enabled: this.syncScrollEnabled });
+    }
+  }
+
+  private syncViewportFromCounterpart(session: WyseeEditorSession): void {
+    if (!this.syncScrollEnabled || !session.diffContext) {
+      return;
+    }
+    const counterpart = this.findDiffCounterpartSession(session);
+    const ratio = this.sanitizeViewportRatio(counterpart?.diffViewportRatio);
+    if (!counterpart || typeof ratio !== 'number') {
+      return;
+    }
+    session.panel.webview.postMessage({ type: 'syncViewport', ratio });
+  }
+
+  private pushViewportSyncFromSession(session: WyseeEditorSession): void {
+    if (!this.syncScrollEnabled || !session.diffContext) {
+      return;
+    }
+    const counterpart = this.findDiffCounterpartSession(session);
+    const ratio = this.sanitizeViewportRatio(session.diffViewportRatio);
+    if (!counterpart || typeof ratio !== 'number') {
+      return;
+    }
+    counterpart.panel.webview.postMessage({ type: 'syncViewport', ratio });
+  }
+
+  private findDiffCounterpartSession(session: WyseeEditorSession): WyseeEditorSession | undefined {
+    if (!session.diffContext) {
+      return undefined;
+    }
+    for (const candidate of this.sessions.values()) {
+      if (candidate.sessionId === session.sessionId || !candidate.diffContext) {
+        continue;
+      }
+      if (candidate.diffContext.side === session.diffContext.side) {
+        continue;
+      }
+      if (uriEquals(candidate.document.uri, session.diffContext.counterpartUri)
+        && uriEquals(candidate.diffContext.counterpartUri, session.document.uri)) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  private pushDiffLayoutToSession(session: WyseeEditorSession, source?: WyseeEditorSession): void {
+    if (!session.diffContext) {
+      return;
+    }
+    const counterpart = source ?? this.findDiffCounterpartSession(session);
+    const measurements = counterpart?.diffLayoutMeasurements
+      ? Object.entries(counterpart.diffLayoutMeasurements).map(([groupId, height]) => ({ groupId, height }))
+      : [];
+    session.panel.webview.postMessage({ type: 'applyDiffLayout', measurements });
+  }
+
+  private pushDiffLayoutBetweenSessions(session: WyseeEditorSession): void {
+    const counterpart = this.findDiffCounterpartSession(session);
+    if (!counterpart) {
+      return;
+    }
+    this.pushDiffLayoutToSession(session, counterpart);
+    this.pushDiffLayoutToSession(counterpart, session);
+  }
+
+  private isSessionEditable(session?: Pick<WyseeEditorSession, 'document' | 'diffContext'>): boolean {
+    return Boolean(session && session.document.uri.scheme === 'file' && !session.diffContext && this.isEditable(session.document.uri));
+  }
+
+  private async decorateModelWithDiff(session: WyseeEditorSession, model: RenderViewModel): Promise<void> {
+    model.editable = this.isSessionEditable(session);
+
+    if (session.diffContext) {
+      try {
+        const counterpartDocument = await vscode.workspace.openTextDocument(session.diffContext.counterpartUri);
+        const counterpartModel = await this.renderer.renderDocumentToViewModel(counterpartDocument, {
+          mode: 'webview', trusted: vscode.workspace.isTrusted, webview: session.panel.webview,
+        });
+        const presentations = session.diffContext.side === 'original'
+          ? buildSideBySideDiffPresentations(model, counterpartModel, 'Open Changes')
+          : buildSideBySideDiffPresentations(counterpartModel, model, 'Open Changes');
+        model.diff = session.diffContext.side === 'original' ? presentations.original : presentations.modified;
+      } catch (error) {
+        this.trace.trace('Unable to hydrate diff counterpart', {
+          uri: session.document.uri.toString(),
+          counterpart: session.diffContext.counterpartUri.toString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+        model.diff = undefined;
+      }
+      // Override scroll target if a gutter click triggered the diff open
+      if (model.diff && typeof this.pendingDiffScrollLine === 'number') {
+        const targetAnchor = this.findNearestDiffAnchor(model, this.pendingDiffScrollLine);
+        if (targetAnchor) {
+          (model.diff as any).firstAnchorId = targetAnchor;
+        }
+        this.pendingDiffScrollLine = undefined;
+      }
+      model.editable = false;
+      return;
+    }
+
+    const comparison = await resolveGitWorkingTreeComparison(session.document.uri, this.gitApi);
+    if (comparison.mode === 'conflict') {
+      model.diff = buildConflictPresentation(comparison.label);
+      model.editable = false;
+      return;
+    }
+    if (comparison.mode === 'added') {
+      model.diff = buildAllAddedPresentation(model, comparison.label);
+      return;
+    }
+    if (comparison.mode === 'compare' && comparison.baseUri) {
+      try {
+        const baseDocument = await vscode.workspace.openTextDocument(comparison.baseUri);
+        const baseModel = await this.renderer.renderDocumentToViewModel(baseDocument, {
+          mode: 'webview', trusted: vscode.workspace.isTrusted, webview: session.panel.webview,
+        });
+        model.diff = buildWorkingTreeDiffPresentation(baseModel, model, comparison.label);
+      } catch (error) {
+        this.trace.trace('Unable to hydrate Git base', {
+          uri: session.document.uri.toString(),
+          base: comparison.baseUri.toString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+        model.diff = undefined;
+      }
+      return;
+    }
+
+    model.diff = undefined;
+  }
+
+  /**
+   * Find the blockId closest to a target line that has a diff state other than 'unchanged'.
+   * Used to scroll the diff view to the clicked gutter indicator.
+   */
+  private findNearestDiffAnchor(model: RenderViewModel, targetLine: number): string | undefined {
+    const diffBlocks = (model.diff as any)?.blocks;
+    if (!diffBlocks || !model.blockMap?.length) return undefined;
+
+    let bestId: string | undefined;
+    let bestDist = Infinity;
+
+    for (const entry of model.blockMap) {
+      const info = diffBlocks[entry.blockId];
+      if (!info || info.state === 'unchanged') continue;
+      const dist = Math.min(
+        Math.abs(entry.startLine - targetLine),
+        Math.abs(entry.endLine - targetLine),
+      );
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = entry.blockId;
+      }
+    }
+
+    return bestId;
   }
 
   async openSourceToSide(uri: vscode.Uri): Promise<void> {
@@ -230,11 +620,19 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
     const model = await this.renderer.renderDocumentToViewModel(session.document, {
       mode: 'webview', trusted: vscode.workspace.isTrusted, webview: session.panel.webview,
     });
+    const sectionDepth = clampHeadingDepth(vscode.workspace.getConfiguration('wyseeMd', session.document.uri).get<number>('preview.statsSectionDepth', 1));
+    model.stats = await buildDocumentStats(session.document, model.blockMap, sectionDepth);
+    await this.decorateModelWithDiff(session, model);
     session.state.documentVersion = session.document.version;
     session.model = model;
     session.panel.webview.postMessage({ type: 'render', model });
+    this.pushDiffLayoutToSession(session);
+    if (session.diffContext) {
+      this.pushDiffLayoutBetweenSessions(session);
+      this.syncViewportFromCounterpart(session);
+    }
     if (this.lastActiveSessionId === session.sessionId) {
-      await this.contextState.applySession(session.state, model.editable, this.browserPrintAvailable());
+      await this.contextState.applySession(session.state, this.isSessionEditable(session), this.browserPrintAvailable());
     }
   }
 
@@ -248,7 +646,7 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
         session.state.focusedBlockId = message.blockId;
         session.state.focusedBlockKind = message.blockKind;
         this.lastActiveSessionId = session.sessionId;
-        await this.contextState.applySession(session.state, this.isEditable(session.document.uri), this.browserPrintAvailable());
+        await this.contextState.applySession(session.state, this.isSessionEditable(session), this.browserPrintAvailable());
         break;
       case 'blockClicked': {
         // Always jump to source block on click (webview initiated, suppress source echo)
@@ -271,13 +669,13 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
         session.state.lastContextMenuAt = Date.now();
         (session.state as any).insertAfterBlockId = message.insertAfterBlockId;
         this.lastActiveSessionId = session.sessionId;
-        await this.contextState.applySession(session.state, this.isEditable(session.document.uri), this.browserPrintAvailable());
+        await this.contextState.applySession(session.state, this.isSessionEditable(session), this.browserPrintAvailable());
         await this.contextState.setCanInsertBlock(message.canInsertBlock !== false);
         break;
       case 'selection':
         session.state.hasSelection = message.hasSelection;
         session.state.selectionText = message.selectionText;
-        await this.contextState.applySession(session.state, this.isEditable(session.document.uri), this.browserPrintAvailable());
+        await this.contextState.applySession(session.state, this.isSessionEditable(session), this.browserPrintAvailable());
         break;
       case 'editBlock':
         try {
@@ -342,6 +740,7 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
       }
       case 'syncScrollChanged':
         this.syncScrollEnabled = message.enabled;
+        this.broadcastSyncScrollSetting();
         break;
       case 'editPanelState':
         (session.state as any).editPanelActive = message.active;
@@ -355,6 +754,30 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
         } else {
           // Panel open, textarea NOT focused: block insertion in canvas
           await this.contextState.setCanInsertBlock(false);
+        }
+        break;
+      case 'pasteClipboardImages':
+        try {
+          await this.handlePasteClipboardImages(session, message);
+        } catch (error) {
+          this.trace.error(error instanceof Error ? error : String(error));
+          session.panel.webview.postMessage({ type: 'showError', message: error instanceof Error ? error.message : String(error) });
+        }
+        break;
+      case 'reportDiffLayout':
+        session.diffLayoutMeasurements = this.sanitizeDiffLayoutMeasurements(message.measurements);
+        this.pushDiffLayoutBetweenSessions(session);
+        break;
+      case 'reportViewport':
+        session.diffViewportRatio = this.sanitizeViewportRatio(message.ratio);
+        this.pushViewportSyncFromSession(session);
+        break;
+      case 'openDiffAtLine':
+        this.pendingDiffScrollLine = typeof message.line === 'number' ? message.line : undefined;
+        try {
+          await vscode.commands.executeCommand('git.openChange', session.document.uri);
+        } catch {
+          this.pendingDiffScrollLine = undefined;
         }
         break;
       case 'undo':
@@ -389,6 +812,87 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
     }
     await vscode.workspace.applyEdit(edit);
     await document.save();
+  }
+
+  private async handlePasteClipboardImages(
+    session: WyseeEditorSession,
+    message: { target: 'editPanel' | 'selectedBlock'; blockId?: string; images: { dataUrl: string; mimeType: string }[] },
+  ): Promise<void> {
+    const savedFiles = await this.saveClipboardImages(session.document.uri, message.images);
+    if (!savedFiles.length) {
+      return;
+    }
+    const markdown = savedFiles.map((name) => `![Clipboard image](${name})`).join('\n\n');
+    if (message.target === 'editPanel') {
+      session.panel.webview.postMessage({ type: 'insertTemplateIntoTextarea', text: markdown });
+      return;
+    }
+
+    const anchor = vscode.workspace.getConfiguration('wyseeMd', session.document.uri).get<'before' | 'after'>('preview.insertRelativeToBlock', 'after');
+    const afterBlockId = this.resolveAfterBlockIdForAnchor(session.document, message.blockId ?? null, anchor);
+    await this.handleInsertAtBoundary(session, afterBlockId, markdown);
+  }
+
+  private async saveClipboardImages(
+    documentUri: vscode.Uri,
+    images: { dataUrl: string; mimeType: string }[],
+  ): Promise<string[]> {
+    const dir = path.dirname(documentUri.fsPath);
+    let nextIndex = await this.findNextClipboardImageIndex(dir);
+    const saved: string[] = [];
+
+    for (const image of images) {
+      const match = /^data:[^;]+;base64,(.+)$/i.exec(image.dataUrl);
+      if (!match) {
+        continue;
+      }
+      const filename = `wysee-clipboard-${nextIndex}.png`;
+      const target = path.join(dir, filename);
+      await fs.writeFile(target, Buffer.from(match[1], 'base64'));
+      saved.push(filename);
+      nextIndex += 1;
+    }
+
+    return saved;
+  }
+
+  private async findNextClipboardImageIndex(dir: string): Promise<number> {
+    try {
+      const entries = await fs.readdir(dir);
+      let max = 0;
+      for (const entry of entries) {
+        const match = /^wysee-clipboard-(\d+)\.png$/i.exec(entry);
+        if (!match) {
+          continue;
+        }
+        max = Math.max(max, Number(match[1]));
+      }
+      return max + 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  private resolveAfterBlockIdForAnchor(
+    document: vscode.TextDocument,
+    blockId: string | null,
+    anchor: 'before' | 'after',
+  ): string | null {
+    const blocks = buildBlockMap(document).filter((block) => block.kind !== 'footnoteDefinition');
+    if (!blocks.length) {
+      return null;
+    }
+    if (!blockId || blockId === 'b:footnotes') {
+      return anchor === 'before' ? null : blocks[blocks.length - 1].blockId;
+    }
+    if (anchor === 'after') {
+      return blockId;
+    }
+    const index = blocks.findIndex((block) => block.blockId === blockId);
+    if (index <= 0) {
+      return null;
+    }
+    return blocks[index - 1].blockId;
   }
 
   private async handleEditWithFootnotes(
@@ -447,6 +951,7 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
   private getHtml(webview: vscode.Webview, sessionId: string): string {
     const nonce = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'wysee-editor.css'));
+    const shortcutsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'wysee-editor-shortcuts.js'));
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'wysee-editor.js'));
     const mermaidUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', 'mermaid', 'dist', 'mermaid.min.js'));
     const katexCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', 'katex', 'dist', 'katex.min.css'));
@@ -468,11 +973,32 @@ ${hljsCssUri ? `<link rel="stylesheet" href="${hljsCssUri}" />` : ''}
 </head>
 <body data-session-id="${escapeHtml(sessionId)}">
 <div id="wysee-sync-bar" class="wysee-sync-bar">
-  <label><input type="checkbox" id="wysee-sync-scroll" ${syncDefault ? 'checked' : ''} /> Sync scroll</label>
+  <div class="wysee-sync-bar-left">
+    <span id="wysee-word-count" class="wysee-stat-summary">Word Count: 0</span>
+    <button type="button" id="wysee-more-stats" class="wysee-link-button">More Stats</button>
+  </div>
+  <div class="wysee-sync-bar-right">
+    <label><input type="checkbox" id="wysee-sync-scroll" ${syncDefault ? 'checked' : ''} /> Sync scroll</label>
+  </div>
+</div>
+<div id="wysee-find-bar" class="wysee-find-bar is-hidden" role="search" aria-label="Find in document">
+  <div class="wysee-find-input-group">
+    <input type="text" id="wysee-find-input" placeholder="Find" aria-label="Find" />
+    <button type="button" id="wysee-find-prev" class="wysee-find-nav" aria-label="Previous match">&#x25B2;</button>
+    <button type="button" id="wysee-find-next" class="wysee-find-nav" aria-label="Next match">&#x25BC;</button>
+  </div>
+  <span id="wysee-find-status" class="wysee-find-status"></span>
+  <div class="wysee-find-toggles">
+    <label class="wysee-find-toggle"><input type="checkbox" id="wysee-find-highlight-all" checked />Highlight All</label>
+    <label class="wysee-find-toggle"><input type="checkbox" id="wysee-find-match-case" />Match case</label>
+    <label class="wysee-find-toggle"><input type="checkbox" id="wysee-find-match-markdown" />Match Markdown</label>
+  </div>
+  <button type="button" id="wysee-find-close" aria-label="Close find">×</button>
 </div>
 <div id="wysee-root" class="wysee-root"></div>
 <div id="wysee-overlay-host"></div>
 <script nonce="${nonce}">window.__WYSEE_SESSION_ID__ = ${JSON.stringify(sessionId)}; window.__WYSEE_MERMAID_URI__ = ${JSON.stringify(mermaidUri.toString())}; window.__WYSEE_KATEX_URI__ = ${JSON.stringify(katexJsUri.toString())}; window.__WYSEE_SYNC_DEFAULT__ = ${syncDefault};</script>
+<script nonce="${nonce}" src="${shortcutsUri}"></script>
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

@@ -112,6 +112,149 @@ ${pageNumbersConfig?.enabled ? '<div class="wysee-page-number-footer" id="wysee-
     }
   }
 
+  async exportPdfToFile(uri: vscode.Uri, themeId?: string, pageProfileId?: string): Promise<void> {
+    await this.assertTrusted();
+
+    // 1. Show native save dialog
+    const defaultName = path.parse(uriBasename(uri)).name + '.pdf';
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(path.join(path.dirname(uri.fsPath), defaultName)),
+      filters: { 'PDF': ['pdf'] },
+      title: 'Save PDF',
+    });
+    if (!target) return; // cancelled
+
+    // 2. Find a Chromium-based browser for headless rendering
+    const chromePath = await this.findChromiumExecutable();
+    if (!chromePath) {
+      // Fall back to browser dialog with a notification
+      this.trace.info('No Chromium browser found for headless PDF, falling back to browser dialog');
+      await vscode.window.showInformationMessage(
+        'No Chrome/Chromium/Edge browser was found for direct PDF export. Opening browser print dialog instead.',
+        'OK',
+      );
+      return this.exportPdfViaBrowserDialog(uri, themeId, pageProfileId);
+    }
+
+    // 3. Build the bundle and serve it
+    await this.printServer.ensureStarted();
+    const bundle = await this.buildPrintBundle(uri, themeId, pageProfileId, 'pdf');
+    const url = this.printServer.createJob(bundle);
+
+    // 4. Run headless Chrome to generate the PDF
+    const outputPath = target.fsPath;
+    this.trace.info('Headless PDF export', { chromePath, outputPath, url });
+
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Saving PDF…', cancellable: false },
+      async () => {
+        await this.runHeadlessPdf(chromePath, url, outputPath);
+      },
+    );
+
+    // 5. Verify and notify
+    try {
+      await fs.access(outputPath);
+      const openAction = await vscode.window.showInformationMessage(
+        `PDF saved to ${path.basename(outputPath)}`,
+        'Open File',
+        'Open Folder',
+      );
+      if (openAction === 'Open File') {
+        await vscode.env.openExternal(target);
+      } else if (openAction === 'Open Folder') {
+        await vscode.env.openExternal(vscode.Uri.file(path.dirname(outputPath)));
+      }
+    } catch {
+      throw new Error('PDF export failed — the output file was not created. Ensure Chrome or Chromium is installed.');
+    }
+  }
+
+  private async runHeadlessPdf(chromePath: string, url: string, outputPath: string): Promise<void> {
+    const { spawn: spawnProc } = await import('child_process');
+    return new Promise<void>((resolve, reject) => {
+      const args = [
+        '--headless=new',
+        '--disable-gpu',
+        '--no-pdf-header-footer',
+        `--print-to-pdf=${outputPath}`,
+        '--virtual-time-budget=10000',
+        '--run-all-compositor-stages-before-draw',
+        '--disable-extensions',
+        '--no-first-run',
+        '--disable-default-apps',
+        url,
+      ];
+      const child = spawnProc(chromePath, args, { stdio: 'pipe' });
+      let stderr = '';
+      child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new Error('Headless PDF export timed out after 30 seconds.'));
+      }, 30000);
+      child.on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+      child.on('close', (code) => {
+        clearTimeout(timeout);
+        if (code === 0) {
+          resolve();
+        } else {
+          this.trace.warn('Headless Chrome exited with errors', { code, stderr: stderr.slice(0, 500) });
+          // Chrome often exits with non-zero but still produces the PDF
+          resolve();
+        }
+      });
+    });
+  }
+
+  private async findChromiumExecutable(): Promise<string | null> {
+    const config = vscode.workspace.getConfiguration('wyseeMd');
+    const browserPath = config.get<string>('print.browserPath', '');
+    if (browserPath) {
+      try {
+        await fs.access(browserPath);
+        return browserPath;
+      } catch { /* configured path not found */ }
+    }
+
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+
+    const candidates = process.platform === 'win32'
+      ? [
+          process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+          process.env['PROGRAMFILES(X86)'] && path.join(process.env['PROGRAMFILES(X86)']!, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+          process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+          process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+          process.env['PROGRAMFILES(X86)'] && path.join(process.env['PROGRAMFILES(X86)']!, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+        ].filter(Boolean) as string[]
+      : process.platform === 'darwin'
+        ? [
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Chromium.app/Contents/MacOS/Chromium',
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+          ]
+        : ['google-chrome', 'chromium', 'chromium-browser', 'msedge', 'microsoft-edge'];
+
+    for (const candidate of candidates) {
+      try {
+        if (path.isAbsolute(candidate)) {
+          await fs.access(candidate);
+          return candidate;
+        } else {
+          // Check if command is on PATH
+          const whichCmd = process.platform === 'win32' ? 'where' : 'which';
+          const { stdout } = await execFileAsync(whichCmd, [candidate]);
+          if (stdout.trim()) return stdout.trim().split('\n')[0];
+        }
+      } catch { /* next candidate */ }
+    }
+    return null;
+  }
+
   private async rewriteAssets(document: vscode.TextDocument, html: string): Promise<{ html: string; assets: PrintBundle['assets'] }> {
     const { document: dom } = parseHTML(`<html><body>${html}</body></html>`);
     const assets: PrintBundle['assets'] = [];

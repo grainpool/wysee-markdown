@@ -344,6 +344,21 @@ function wrapMisspellings(dom: ReturnType<typeof parseHTML>['document'], block: 
 }
 
 export function preprocessMath(text: string): string {
+  // Protect code blocks and inline code from math processing.
+  // Replace them with placeholders, run math regexes, then restore.
+  const placeholders: string[] = [];
+  function stash(match: string): string {
+    placeholders.push(match);
+    return `\x00MATHGUARD${placeholders.length - 1}\x00`;
+  }
+
+  // 1. Stash fenced code blocks (``` or ~~~)
+  text = text.replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1\s*$/gm, stash);
+  // 2. Stash inline code (backtick runs of any length)
+  text = text.replace(/(`+)(?!\s*$)([\s\S]*?[^`])\1(?!`)/g, stash);
+  // 3. Stash indented code blocks (4-space or tab indented lines)
+  text = text.replace(/^(?: {4}|\t).+(\n(?: {4}|\t).+)*/gm, stash);
+
   // Block math: $$...$$  (must be on its own line or spanning lines)
   text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_match, body: string) => {
     const encoded = escapeHtml(body.trim());
@@ -354,6 +369,9 @@ export function preprocessMath(text: string): string {
     const encoded = escapeHtml(body);
     return `<span class="wysee-math" data-wysee-math-display="inline" data-wysee-math-source="${encoded}">${encoded}</span>`;
   });
+
+  // Restore stashed code
+  text = text.replace(/\x00MATHGUARD(\d+)\x00/g, (_m, idx) => placeholders[Number(idx)]);
   return text;
 }
 // ── Custom Footnote System ──────────────────────────────────────
@@ -410,12 +428,20 @@ export function buildFootnoteRegistry(blockMap: BlockMapEntry[]): Map<string, Fo
  */
 export function resolveFootnoteReferences(html: string, registry: Map<string, FootnoteEntry>): string {
   if (registry.size === 0) return html;
+  // Protect <code> and <pre> content from footnote matching
+  const codeGuards: string[] = [];
+  let guarded = html.replace(/<(code|pre)[^>]*>[\s\S]*?<\/\1>/gi, (match) => {
+    codeGuards.push(match);
+    return `\x00FNGUARD${codeGuards.length - 1}\x00`;
+  });
   // Match literal [^label] in the HTML (it will appear as text since markdown-it didn't process it)
-  return html.replace(/\[\^([^\]]+)\]/g, (_all, label: string) => {
+  guarded = guarded.replace(/\[\^([^\]]+)\]/g, (_all, label: string) => {
     const entry = registry.get(label);
     if (!entry) return _all; // leave unknown refs as-is
     return `<sup class="wysee-footnote-ref"><a href="#wysee-fn-${escapeHtml(label)}" id="wysee-fnref-${escapeHtml(label)}" title="${escapeHtml(entry.text)}">${entry.ordinal}</a></sup>`;
   });
+  // Restore code content
+  return guarded.replace(/\x00FNGUARD(\d+)\x00/g, (_, i) => codeGuards[Number(i)]);
 }
 
 /**

@@ -4,14 +4,150 @@ body { margin: 0; padding: 0; background: var(--vscode-editor-background); color
 /* Sync scroll bar */
 .wysee-sync-bar {
   position: sticky; top: 0; z-index: 18;
-  display: flex; align-items: center; justify-content: flex-end;
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
   padding: .25rem .75rem;
   background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--vscode-panel-border);
   font-size: .82rem; color: var(--vscode-descriptionForeground);
 }
+.wysee-sync-bar-left,
+.wysee-sync-bar-right {
+  display: flex; align-items: center; gap: .6rem;
+  min-width: 0;
+}
 .wysee-sync-bar label { display: flex; align-items: center; gap: .35rem; cursor: pointer; user-select: none; }
 .wysee-sync-bar input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
+.wysee-stat-summary { font-weight: 600; color: var(--vscode-foreground); }
+.wysee-link-button,
+.wysee-find-bar button:not(.wysee-find-nav),
+.wysee-issue-link,
+.wysee-modal-close,
+.wysee-stat-value-button {
+  font: inherit;
+  color: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.wysee-link-button:hover,
+.wysee-find-bar button:not(.wysee-find-nav):hover,
+.wysee-issue-link:hover,
+.wysee-modal-close:hover,
+.wysee-stat-value-button:hover {
+  text-decoration: underline;
+}
+.wysee-find-bar {
+  position: sticky; top: 2rem; z-index: 17;
+  display: flex; align-items: center; gap: .35rem;
+  flex-wrap: wrap;
+  padding: .4rem .75rem;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.wysee-find-bar.is-hidden { display: none; }
+.wysee-find-input-group {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  overflow: hidden;
+}
+.wysee-find-input-group input[type="text"] {
+  min-width: 12rem;
+  padding: .2rem .4rem;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--vscode-input-foreground, var(--vscode-foreground));
+  font: inherit;
+}
+.wysee-find-nav {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  padding: 0; margin: 0;
+  border: none;
+  border-left: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  background: transparent;
+  color: var(--vscode-input-foreground, var(--vscode-foreground));
+  font-size: .55rem;
+  cursor: pointer;
+  opacity: .7;
+  line-height: 1;
+}
+.wysee-find-nav:hover { opacity: 1; background: rgba(127,127,127,.12); }
+.wysee-find-status {
+  min-width: 4rem;
+  color: var(--vscode-descriptionForeground);
+  font-size: .82rem;
+}
+.wysee-find-bar button:not(.wysee-find-nav) {
+  padding: .15rem .35rem;
+  border-radius: 3px;
+}
+.wysee-find-toggles {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  margin-left: .25rem;
+  padding-left: .35rem;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+.wysee-find-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .15rem;
+  font-size: .78rem;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wysee-find-toggle input[type="checkbox"] {
+  accent-color: var(--vscode-focusBorder);
+  margin: 0;
+  width: 13px; height: 13px;
+}
+/* Fallback: if toggles are direct children of find-bar (before TS recompile) */
+.wysee-find-bar > .wysee-find-toggle {
+  margin-left: 0;
+}
+.wysee-find-bar > .wysee-find-toggle:first-of-type {
+  margin-left: .25rem;
+  padding-left: .35rem;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+.wysee-find-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 16;
+}
+.wysee-find-hit {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+  background: rgba(255, 223, 100, .3);
+  border: 1px solid rgba(220, 190, 50, .45);
+  box-sizing: border-box;
+}
+.wysee-find-hit.is-active {
+  background: rgba(255, 175, 50, .45);
+  border-color: rgba(230, 140, 20, .75);
+  box-shadow: 0 0 0 1px rgba(230, 140, 20, .75);
+}
+.wysee-find-hit.is-block {
+  border-radius: 6px;
+}
+
+/* Suppress native text-selection highlight on canvas while find overlay is visible */
+.wysee-root.has-find-results ::selection {
+  background: transparent;
+}
+.wysee-root.has-find-results ::-moz-selection {
+  background: transparent;
+}
 
 /* Root */
 .wysee-root { padding: .75rem 1rem 2rem; position: relative; }
@@ -112,8 +248,6 @@ body { margin: 0; padding: 0; background: var(--vscode-editor-background); color
   font-size: .78rem; color: var(--vscode-descriptionForeground);
 }
 
-/* ── Overlay host (kept for errors only) ── */
-#wysee-overlay-host { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
 
 /* Spell — use background-image SVG wave (text-decoration: wavy fails in VS Code webviews) */
 span[data-wysee-spell="misspelled"] {
@@ -154,3 +288,406 @@ span[data-wysee-spell="misspelled"] {
 
 /* Strikethrough */
 .wysee-block s, .wysee-block del { text-decoration: line-through; opacity: .7; }
+
+
+/* Modals / stats */
+#wysee-overlay-host {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+#wysee-overlay-host.has-modal {
+  pointer-events: auto;
+}
+.wysee-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, .45);
+}
+.wysee-modal {
+  width: min(760px, calc(100vw - 2rem));
+  max-height: min(80vh, 900px);
+  overflow: auto;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-foreground);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .35);
+}
+.wysee-modal-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .8rem 1rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: inherit;
+}
+.wysee-modal-title {
+  margin: 0;
+  font-size: 1rem;
+}
+.wysee-modal-close {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.wysee-modal-body {
+  padding: .9rem 1rem 1rem;
+}
+.wysee-stats-grid {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto;
+  gap: .45rem .9rem;
+  align-items: start;
+}
+.wysee-stat-label {
+  color: var(--vscode-descriptionForeground);
+}
+.wysee-stat-value {
+  font-weight: 600;
+}
+.wysee-stat-value-button {
+  font-weight: 600;
+}
+.wysee-stats-section {
+  margin-top: 1rem;
+}
+.wysee-stats-section h3 {
+  margin: 0 0 .5rem;
+  font-size: .95rem;
+}
+.wysee-section-counts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .35rem;
+}
+.wysee-section-counts li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .35rem .5rem;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+}
+.wysee-section-count-heading {
+  min-width: 0;
+}
+.wysee-section-count-value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wysee-issues-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .45rem;
+}
+.wysee-issue-item {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: .55rem .65rem;
+  background: var(--vscode-editor-background);
+}
+.wysee-issue-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .2rem;
+  width: 100%;
+  text-align: left;
+}
+.wysee-issue-meta {
+  font-size: .78rem;
+  color: var(--vscode-descriptionForeground);
+}
+.wysee-issue-snippet {
+  font-family: var(--vscode-editor-font-family, monospace);
+  color: var(--vscode-foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.wysee-empty-state {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+
+/* Diff presentation */
+.wysee-root {
+  --wysee-diff-added-bg: var(--vscode-diffEditor-insertedLineBackground, rgba(46, 160, 67, .16));
+  --wysee-diff-added-inline: var(--vscode-diffEditor-insertedTextBackground, rgba(46, 160, 67, .28));
+  --wysee-diff-deleted-bg: var(--vscode-diffEditor-removedLineBackground, rgba(248, 81, 73, .16));
+  --wysee-diff-deleted-inline: var(--vscode-diffEditor-removedTextBackground, rgba(248, 81, 73, .28));
+  --wysee-diff-modified-bg: rgba(56, 139, 253, .14);
+  --wysee-diff-modified-inline: rgba(56, 139, 253, .3);
+  --wysee-diff-run-gap: 6px;
+}
+.wysee-root.has-git-diff { padding-left: 1.25rem; }
+.wysee-diff-banner {
+  margin: 0 0 .8rem;
+  padding: .55rem .75rem;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  color: var(--vscode-descriptionForeground);
+}
+.wysee-diff-gutter {
+  position: absolute;
+  left: -.8rem;
+  top: .15rem;
+  bottom: .15rem;
+  width: 4px;
+  border-radius: 999px;
+  pointer-events: none;
+}
+/* In normal git-diff view (not side-by-side), make gutters clickable */
+.wysee-root.has-git-diff:not(.is-diff-mode) .wysee-diff-gutter {
+  pointer-events: auto;
+  cursor: pointer;
+  width: 10px;
+  left: -1rem;
+  transition: opacity .12s;
+}
+.wysee-root.has-git-diff:not(.is-diff-mode) .wysee-diff-gutter:hover {
+  opacity: .75;
+}
+.wysee-diff-gutter--modified {
+  background: var(--vscode-editorGutter-modifiedBackground, #388bfd);
+}
+.wysee-root.is-diff-mode[data-wysee-diff-side="original"] .wysee-diff-gutter--modified {
+  background: var(--vscode-editorGutter-deletedBackground, #f85149);
+}
+.wysee-root.is-diff-mode[data-wysee-diff-side="modified"] .wysee-diff-gutter--modified {
+  background: var(--vscode-editorGutter-addedBackground, #2ea043);
+}
+.wysee-diff-gutter--added {
+  background: var(--vscode-editorGutter-addedBackground, #2ea043);
+}
+.wysee-diff-gutter--deleted {
+  background: var(--vscode-editorGutter-deletedBackground, #f85149);
+}
+.wysee-diff-block {
+  position: relative;
+  display: flow-root;
+  transition: background-color .16s ease, box-shadow .16s ease;
+}
+.wysee-diff-block--modified {
+  background: var(--wysee-diff-modified-bg);
+  box-shadow: inset 0 0 0 1px rgba(56, 139, 253, .34);
+}
+.wysee-root.is-diff-mode[data-wysee-diff-side="original"] .wysee-diff-block--modified {
+  background: var(--wysee-diff-deleted-bg);
+  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, .36);
+}
+.wysee-root.is-diff-mode[data-wysee-diff-side="modified"] .wysee-diff-block--modified {
+  background: var(--wysee-diff-added-bg);
+  box-shadow: inset 0 0 0 1px rgba(46, 160, 67, .36);
+}
+.wysee-diff-block--added {
+  background: var(--wysee-diff-added-bg);
+  box-shadow: inset 0 0 0 1px rgba(46, 160, 67, .36);
+}
+.wysee-diff-block--deleted {
+  background: var(--wysee-diff-deleted-bg);
+  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, .36);
+}
+.wysee-diff-group--single {
+  border-radius: 6px;
+}
+.wysee-diff-group--start {
+  margin-bottom: 0;
+  border-radius: 6px 6px 0 0;
+}
+.wysee-diff-group--middle {
+  margin-top: 0;
+  margin-bottom: 0;
+  border-radius: 0;
+}
+.wysee-diff-group--end {
+  margin-top: 0;
+  border-radius: 0 0 6px 6px;
+}
+.wysee-diff-group--start::after,
+.wysee-diff-group--middle::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--wysee-diff-run-gap));
+  height: var(--wysee-diff-run-gap);
+  background: inherit;
+  pointer-events: none;
+}
+.wysee-diff-inline {
+  border-radius: 3px;
+  padding: 0 .05em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.wysee-diff-inline--modified {
+  background: var(--wysee-diff-modified-inline);
+}
+.wysee-diff-inline--removed {
+  background: var(--wysee-diff-deleted-inline);
+}
+.wysee-diff-inline--added {
+  background: var(--wysee-diff-added-inline);
+}
+.wysee-diff-placeholder,
+.wysee-diff-deletion-marker {
+  border-radius: 6px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.wysee-diff-placeholder {
+  height: var(--wysee-diff-px-height, calc(var(--wysee-diff-lines, 1) * 1.35rem));
+  min-height: calc(var(--wysee-diff-lines, 1) * 1.35rem);
+  margin: .14rem 0;
+  border: 1px dashed transparent;
+  opacity: .95;
+}
+.wysee-diff-placeholder--added {
+  border-color: var(--vscode-editorGutter-addedBackground, #2ea043);
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(46, 160, 67, .2) 0 10px,
+    rgba(46, 160, 67, .08) 10px 20px
+  );
+}
+.wysee-diff-placeholder--deleted {
+  border-color: var(--vscode-editorGutter-deletedBackground, #f85149);
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(248, 81, 73, .2) 0 10px,
+    rgba(248, 81, 73, .08) 10px 20px
+  );
+}
+.wysee-diff-deletion-marker {
+  position: relative;
+  height: calc(var(--wysee-diff-lines, 1) * .5rem + .2rem);
+  margin: .08rem 0;
+  cursor: pointer;
+}
+.wysee-diff-deletion-marker:hover {
+  opacity: .7;
+}
+.wysee-diff-deletion-marker::before {
+  content: '';
+  position: absolute;
+  left: -.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border-style: solid;
+  border-width: 6px 0 6px 10px;
+  border-color: transparent transparent transparent var(--vscode-editorGutter-deletedBackground, #f85149);
+}
+.wysee-root.is-diff-mode .wysee-block {
+  overflow: clip;
+  display: flow-root;
+}
+
+/* ── Hunk gutter navigator ── */
+.wysee-hunk-nav {
+  position: absolute;
+  width: 1.4rem;
+  height: 5.5rem; /* fixed height, independent of hunk */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: auto;
+  z-index: 15;
+  padding: 3px 0;
+  gap: 2px;
+}
+.wysee-hunk-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 3px;
+  background: var(--vscode-button-secondaryBackground, rgba(127,127,127,.2));
+  color: var(--vscode-foreground);
+  font-size: .7rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: .8;
+  flex-shrink: 0;
+}
+.wysee-hunk-nav-btn:hover {
+  opacity: 1;
+  background: var(--vscode-button-secondaryHoverBackground, rgba(127,127,127,.35));
+}
+.wysee-hunk-nav-counter {
+  writing-mode: vertical-lr;
+  transform: rotate(180deg);
+  font-size: .65rem;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  user-select: none;
+  letter-spacing: .03em;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Hunk focus pulse ── */
+@keyframes wysee-hunk-pulse {
+  0% { box-shadow: inset 0 0 0 2px rgba(56, 139, 253, .7); }
+  100% { box-shadow: inset 0 0 0 2px transparent; }
+}
+.wysee-hunk-focus-pulse {
+  animation: wysee-hunk-pulse .8s ease-out;
+  border-radius: 6px;
+}
+
+/* ── Collapsed unchanged region ── */
+.wysee-unchanged-collapse {
+  padding: .35rem .75rem;
+  margin: .1rem 0;
+  text-align: center;
+  font-size: .78rem;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px dashed var(--vscode-panel-border);
+  user-select: none;
+  transition: background .12s;
+}
+.wysee-unchanged-collapse:hover {
+  background: rgba(127,127,127,.08);
+}
+.wysee-block.is-collapsed-unchanged {
+  display: none !important;
+}
+
+/* Collapse toggle link in the sync bar area */
+.wysee-diff-collapse-link {
+  font: inherit;
+  font-size: .78rem;
+  color: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.wysee-diff-collapse-link:hover {
+  text-decoration: underline;
+}

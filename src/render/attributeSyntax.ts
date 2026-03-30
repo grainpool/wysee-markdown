@@ -11,9 +11,16 @@ export interface ImageAttributeSyntax {
 const IMAGE_ATTR_REGEX = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\{([^}]*)\}/g;
 
 export function parseImageAttributeSyntax(markdown: string): ImageAttributeSyntax[] {
+  // Strip code constructs before scanning for image syntax
+  let stripped = markdown;
+  stripped = stripped.replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1\s*$/gm, '');
+  stripped = stripped.replace(/(`+)(?!\s*$)([\s\S]*?[^`])\1(?!`)/g, '');
+  stripped = stripped.replace(/^(?: {4}|\t).+(\n(?: {4}|\t).+)*/gm, '');
+
   const items: ImageAttributeSyntax[] = [];
   let match: RegExpExecArray | null;
-  while ((match = IMAGE_ATTR_REGEX.exec(markdown))) {
+  const regex = new RegExp(IMAGE_ATTR_REGEX.source, IMAGE_ATTR_REGEX.flags);
+  while ((match = regex.exec(stripped))) {
     const attrs = parseAttrList(match[4]);
     items.push({
       alt: match[1],
@@ -27,12 +34,21 @@ export function parseImageAttributeSyntax(markdown: string): ImageAttributeSynta
 }
 
 export function applyImageAttributeSyntax(markdown: string): string {
-  // Mask inline code spans to prevent matching image syntax inside backticks
+  // Protect all code constructs from image-syntax matching
   const codeMasks: string[] = [];
-  let masked = markdown.replace(/`[^`]+`/g, (match) => {
+  function stash(match: string): string {
     codeMasks.push(match);
-    return `\x00CODE${codeMasks.length - 1}\x00`;
-  });
+    return `\x00IMGGUARD${codeMasks.length - 1}\x00`;
+  }
+
+  let masked = markdown;
+  // 1. Fenced code blocks (``` or ~~~)
+  masked = masked.replace(/^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1\s*$/gm, stash);
+  // 2. Inline code spans (any backtick run length)
+  masked = masked.replace(/(`+)(?!\s*$)([\s\S]*?[^`])\1(?!`)/g, stash);
+  // 3. Indented code blocks
+  masked = masked.replace(/^(?: {4}|\t).+(\n(?: {4}|\t).+)*/gm, stash);
+
   // Apply image attribute syntax to non-code content
   masked = masked.replace(IMAGE_ATTR_REGEX, (_all, alt, src, title, rawAttrs) => {
     const attrs = parseAttrList(rawAttrs);
@@ -41,8 +57,9 @@ export function applyImageAttributeSyntax(markdown: string): string {
     const alignClass = normalizeAlign(attrs.align) ? ` class="wysee-image align-${normalizeAlign(attrs.align)}"` : ' class="wysee-image"';
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${titleAttr}${alignClass}${width} data-wysee-image-attrs="1" />`;
   });
-  // Restore code spans
-  return masked.replace(/\x00CODE(\d+)\x00/g, (_, i) => codeMasks[Number(i)]);
+
+  // Restore code
+  return masked.replace(/\x00IMGGUARD(\d+)\x00/g, (_, i) => codeMasks[Number(i)]);
 }
 
 export function extractNthImage(markdown: string, occurrenceIndex: number): ImageAttributeSyntax | undefined {

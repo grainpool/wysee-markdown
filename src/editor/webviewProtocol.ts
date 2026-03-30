@@ -15,6 +15,10 @@ export type WebviewToExtensionMessage =
   | { type: 'requestPreview'; markdown: string; requestId: string }
   | { type: 'syncScrollChanged'; enabled: boolean }
   | { type: 'editPanelState'; active: boolean; textareaFocused?: boolean }
+  | { type: 'pasteClipboardImages'; target: 'editPanel' | 'selectedBlock'; blockId?: string; images: { dataUrl: string; mimeType: string }[] }
+  | { type: 'reportDiffLayout'; measurements: { groupId: string; height: number }[] }
+  | { type: 'reportViewport'; ratio: number }
+  | { type: 'openDiffAtLine'; line: number }
   | { type: 'undo' }
   | { type: 'redo' };
 
@@ -27,4 +31,8 @@ export type ExtensionToWebviewMessage =
   | { type: 'scrollToSourceLine'; line: number }
   | { type: 'scrollToBlock'; blockId: string }
   | { type: 'highlightBlock'; blockId: string }
-  | { type: 'insertTemplateIntoTextarea'; text: string };
+  | { type: 'insertTemplateIntoTextarea'; text: string }
+  | { type: 'applyDiffLayout'; measurements: { groupId: string; height: number }[] }
+  | { type: 'syncViewport'; ratio: number }
+  | { type: 'setSyncScroll'; enabled: boolean }
+  | { type: 'openFind' };

@@ -16,6 +16,8 @@ When you open this file, it renders in the Wysee MD canvas automatically. Try th
 
 > **Tip:** Toggle **Sync scroll** in the top bar to keep the canvas and source editor aligned as you navigate.
 
+> **Tip:** If a Markdown file opens in the text editor instead, right-click it in the Explorer or right-click its tab and choose **Open with Wysee**.
+
 ---
 
 ## 1. Text formatting

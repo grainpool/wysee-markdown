@@ -147,6 +147,12 @@ const window = {
   registerCustomEditorProvider() { return { dispose() {} }; },
   activeTextEditor: undefined,
   onDidChangeActiveTextEditor() { return { dispose() {} }; },
+  tabGroups: {
+    all: [],
+    activeTabGroup: undefined,
+    onDidChangeTabs() { return { dispose() {} }; },
+    onDidChangeTabGroups() { return { dispose() {} }; },
+  },
 };
 const commands = { async executeCommand() { return undefined; }, registerCommand() { return { dispose() {} }; } };
 const env = { async openExternal() { return true; }, remoteName: undefined };

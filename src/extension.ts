@@ -112,7 +112,7 @@ async function registerCommands(context: vscode.ExtensionContext, services: Serv
     const uri = await resolveActiveMarkdownUri();
     if (!uri) { return; }
     trace.info('Command entry', { command: 'wyseeMd.exportPdf', uri: uri.toString() });
-    await services.printBundleService.exportPdfViaBrowserDialog(uri);
+    await services.printBundleService.exportPdfToFile(uri);
   });
 
   add('wyseeMd.exportHtml', async () => {
@@ -155,6 +155,19 @@ async function registerCommands(context: vscode.ExtensionContext, services: Serv
     if (!uri) { return; }
     await restoreBuiltInDefault(context);
     await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
+  });
+
+  add('wyseeMd.openWithWysee', async (uri?: vscode.Uri) => {
+    // Resolve URI: from explorer context menu, tab context menu, or active editor
+    let target = uri;
+    if (!target) {
+      target = await resolveActiveMarkdownUri();
+    }
+    if (!target) {
+      vscode.window.showWarningMessage('No Markdown file selected.');
+      return;
+    }
+    await vscode.commands.executeCommand('vscode.openWith', target, 'grainpool.wysee-md.editor');
   });
 
   add('wyseeMd.insertBlock.openMenu', async () => {
