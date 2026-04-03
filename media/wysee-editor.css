@@ -1,3 +1,18 @@
+/* Copyright 2025-2026 Grainpool Holdings LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 :root { color-scheme: light dark; }
 body { margin: 0; padding: 0; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); font-family: var(--vscode-font-family); }
 
@@ -18,6 +33,55 @@ body { margin: 0; padding: 0; background: var(--vscode-editor-background); color
 .wysee-sync-bar label { display: flex; align-items: center; gap: .35rem; cursor: pointer; user-select: none; }
 .wysee-sync-bar input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
 .wysee-stat-summary { font-weight: 600; color: var(--vscode-foreground); }
+
+/* Export options popup */
+.wysee-export-popup-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 50;
+  background: rgba(0,0,0,.35);
+  align-items: center;
+  justify-content: center;
+}
+.wysee-export-popup-overlay.is-visible { display: flex; }
+.wysee-export-popup {
+  min-width: 14rem;
+  max-width: 22rem;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  padding: .4rem 0;
+  font-size: .88rem;
+}
+.wysee-export-popup-title {
+  padding: .4rem .85rem .3rem;
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--vscode-descriptionForeground);
+}
+.wysee-export-popup button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: .45rem .85rem;
+  border: none;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  cursor: pointer;
+}
+.wysee-export-popup button:hover {
+  background: var(--vscode-list-hoverBackground, rgba(127,127,127,.12));
+}
+.wysee-export-popup hr {
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border);
+  margin: .25rem 0;
+}
 .wysee-link-button,
 .wysee-find-bar button:not(.wysee-find-nav),
 .wysee-issue-link,
@@ -676,18 +740,4 @@ span[data-wysee-spell="misspelled"] {
 }
 .wysee-block.is-collapsed-unchanged {
   display: none !important;
-}
-
-/* Collapse toggle link in the sync bar area */
-.wysee-diff-collapse-link {
-  font: inherit;
-  font-size: .78rem;
-  color: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-.wysee-diff-collapse-link:hover {
-  text-decoration: underline;
 }

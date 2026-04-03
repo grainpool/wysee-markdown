@@ -1,3 +1,17 @@
+// Copyright 2025-2026 Grainpool Holdings LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -333,6 +347,35 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
           side: 'original',
           counterpartUri: fallbackCounterpart,
           groupViewColumn: gitSession.panel.viewColumn,
+        });
+      }
+    }
+
+    // File-file pairing fallback: detect ad hoc diffs opened via codium --diff
+    // Two file-scheme sessions opened nearly simultaneously in adjacent columns
+    // with different URIs are likely an ad hoc diff pair.
+    const stillUnresolved = unresolvedFileSessions.filter(s => !matchedFileSessions.has(s.sessionId) && !contexts.has(s.sessionId));
+    if (stillUnresolved.length === 2) {
+      const [a, b] = stillUnresolved;
+      const timeDelta = Math.abs(a.createdAt - b.createdAt);
+      const bothVisible = a.panel.visible && b.panel.visible;
+      const differentColumns = a.panel.viewColumn !== b.panel.viewColumn;
+      const differentFiles = a.document.uri.toString() !== b.document.uri.toString();
+
+      // Heuristic: opened within 2 seconds, both visible, different columns, different files
+      if (timeDelta < 2000 && bothVisible && differentColumns && differentFiles) {
+        // Left column = original, right column = modified
+        const leftSession = (a.panel.viewColumn ?? 0) <= (b.panel.viewColumn ?? 0) ? a : b;
+        const rightSession = leftSession === a ? b : a;
+        contexts.set(leftSession.sessionId, {
+          side: 'original',
+          counterpartUri: rightSession.document.uri,
+          groupViewColumn: rightSession.panel.viewColumn,
+        });
+        contexts.set(rightSession.sessionId, {
+          side: 'modified',
+          counterpartUri: leftSession.document.uri,
+          groupViewColumn: leftSession.panel.viewColumn,
         });
       }
     }
@@ -780,6 +823,21 @@ export class WyseeEditorProvider implements vscode.CustomTextEditorProvider, vsc
           this.pendingDiffScrollLine = undefined;
         }
         break;
+      case 'exportAction': {
+        const actionMap: Record<string, string> = {
+          print: 'wyseeMd.print',
+          savePdf: 'wyseeMd.exportPdf',
+          style: 'wyseeMd.theme.select',
+          source: 'wyseeMd.source.openToSide',
+          exportApprovalMatrix: 'wysee.exportApprovalMatrix',
+          configureAi: 'wysee.approvalMatrix.ai.settings',
+        };
+        const cmd = actionMap[message.action];
+        if (cmd) {
+          await vscode.commands.executeCommand(cmd);
+        }
+        break;
+      }
       case 'undo':
         await vscode.commands.executeCommand('undo');
         break;
@@ -974,11 +1032,23 @@ ${hljsCssUri ? `<link rel="stylesheet" href="${hljsCssUri}" />` : ''}
 <body data-session-id="${escapeHtml(sessionId)}">
 <div id="wysee-sync-bar" class="wysee-sync-bar">
   <div class="wysee-sync-bar-left">
-    <span id="wysee-word-count" class="wysee-stat-summary">Word Count: 0</span>
-    <button type="button" id="wysee-more-stats" class="wysee-link-button">More Stats</button>
+    <button type="button" id="wysee-export-menu-btn" class="wysee-link-button">Export options\u2026</button>
   </div>
   <div class="wysee-sync-bar-right">
+    <span id="wysee-word-count" class="wysee-stat-summary">Word Count: 0</span>
+    <button type="button" id="wysee-more-stats" class="wysee-link-button">More Stats</button>
     <label><input type="checkbox" id="wysee-sync-scroll" ${syncDefault ? 'checked' : ''} /> Sync scroll</label>
+  </div>
+</div>
+<div id="wysee-export-overlay" class="wysee-export-popup-overlay">
+  <div class="wysee-export-popup">
+    <div class="wysee-export-popup-title">Export options</div>
+    <button type="button" data-wysee-action="print">Print\u2026</button>
+    <button type="button" data-wysee-action="savePdf">Save PDF\u2026</button>
+    <hr />
+    <button type="button" data-wysee-action="exportApprovalMatrix">Export Approval Matrix\u2026</button>
+    <hr />
+    <button type="button" data-wysee-action="configureAi">Configure AI\u2026</button>
   </div>
 </div>
 <div id="wysee-find-bar" class="wysee-find-bar is-hidden" role="search" aria-label="Find in document">

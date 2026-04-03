@@ -1,34 +1,56 @@
-# Wysee MD
+# Wysee Markdown
 
-A WYSIWYG-style Markdown editor for VS Code and VSCodium. Edit Markdown visually with a rendered canvas, live preview, and full source synchronization.
+WYSIWYG Markdown editor with print, rendered diff, intelligent change control, and advanced authoring features — for VS Code and VSCodium.
+
+📖 **[Full documentation →](https://docs.grainpoolholdings.com/open-source-projects/wysee.html)**
 
 ## Features
 
-**Visual Markdown editing** — Markdown files open in a rendered canvas by default. Double-click any block to edit its raw Markdown in an inline panel with a live side-by-side preview. All edits write back to the source document.
+### Visual editing
 
-**Inline block insertion** — `(+)` buttons between blocks let you insert new content directly where you want it. Type raw Markdown on the left, see it rendered on the right, confirm to insert.
+- **WYSIWYG canvas** — Markdown files open in a rendered canvas. Double-click any block to edit its raw Markdown in an inline panel with live side-by-side preview.
+- **Block insertion** — `(+)` buttons between blocks for inserting new content with live preview.
+- **Formatting shortcuts** — Ctrl+B (bold), Ctrl+I (italic), Ctrl+K (link) in the edit panel.
+- **Find** — Ctrl+F with match highlighting, case sensitivity, and prev/next navigation.
+- **Image paste** — Ctrl+V with a clipboard image saves a PNG and inserts the reference.
+- **Context menu** — Right-click to insert headings (H1–H6), links, images, tables (up to 16×32), code fences, mermaid fences, task lists, footnotes, and horizontal rules.
 
-**Bidirectional scroll sync** — Toggle "Sync scroll" to keep the WYSIWYG canvas and source editor aligned. Click a block in the canvas to jump to and highlight its source text.
+### Rendered diff and change control
 
-**Syntax highlighting** — Fenced code blocks render with language-specific coloring. Choose from built-in syntax styles (Match Editor Theme, Light, Dark), create custom syntax themes with per-language overrides, or disable highlighting per language. Managed from the Style panel.
+- **Side-by-side rendered diff** — Visual diff with color-coded block backgrounds, inline word-level highlights, diagonal-stripe placeholders, and synchronized scroll.
+- **Diff gutter indicators** — Blue/green/red gutter marks in the regular editor. Click to jump to the diff view.
+- **Hunk navigation** — ▲/▼ buttons with counter, Alt+Shift+Up/Down shortcuts, focus pulse animation.
+- **Approval matrix export** — Export a ZIP bundle with a styled XLSX workbook and self-contained review HTML. Each hunk becomes one row with rendered before/after card images, approval dropdown, and review link.
+- **Commit-based comparison** — Compare any two revisions via QuickPick with recent commit history, or paste hashes manually. Working tree diff is the one-click default.
+- **Ad hoc diff support** — Side-by-side diffs opened via `code --diff` or `codium --diff` gain full Wysee rendering, hunk navigation, and export support.
+- **AI-assisted summaries** — Optional AI-generated change summaries grounded in document context and Git revision metadata. Configure via the built-in settings panel or `.wysee/ai-config.yaml`. Supports any OpenAI-compatible endpoint including local models (Ollama, LM Studio). Per-model request scheduling, cancellation support, four built-in prompt templates, and field-level config validation. AI failure never blocks export.
 
-**Mermaid diagrams** — Fenced `mermaid` code blocks render as interactive diagrams in the canvas, print output, and HTML export.
+### Rendering
 
-**Math rendering** — Inline `$...$` and block `$$...$$` math expressions rendered via KaTeX.
+- **Syntax highlighting** — Language-specific code coloring with customizable syntax styles and per-language overrides.
+- **Mermaid diagrams** — Fenced `mermaid` blocks render as interactive diagrams in the canvas, print, and export.
+- **KaTeX math** — Inline `$...$` and block `$$...$$` math expressions.
+- **Footnotes** — `[^N]` references as superscripts with a footnote section. Editable from the referencing block.
+- **Strikethrough** — `~~text~~` with line-through rendering.
 
-**Footnotes** — `[^1]` references render as superscripts with a footnote section at the document end. Edit footnote text directly from the referencing block's edit panel.
+### Print and export
 
-**Strikethrough** — `~~text~~` renders with line-through decoration.
+- **Print / PDF** — Browser-based print with configurable page size, margins, page numbers, mirror margins, and code wrapping.
+- **PDF via headless Chrome** — `Save PDF…` uses a local Chromium installation for direct export.
+- **Export options** — Persistent bottom-bar "Export options…" popup with Print, Save PDF, Export Approval Matrix, and Configure AI.
 
-**Spellcheck** — Integrated spellcheck in both the canvas and source editor. Misspelled words show a red wavy underline. Right-click to add to dictionary, ignore, or replace.
+### Theming
 
-**Theming** — Switch between document styles (Match Editor Theme, Light, Dark, or custom), syntax highlighting styles, and print profiles from a side panel with inline JSON editing and live preview. Document styles can link to syntax styles and print profiles can link to document styles.
+- **Document styles** — Match Editor Theme, Light, Dark, or custom JSON styles with element-level CSS.
+- **Syntax styles** — Match Editor Theme, Light, Dark, or custom token-level CSS with per-language overrides.
+- **Print profiles** — Page layout, margins, page numbers, mirror margins, and linked document styles.
+- **Style panel** — Side panel with live preview for all three style types.
 
-**Print & PDF** — Browser-based print flow with configurable page size, margins, page numbers, mirror margins, and code wrapping. Print profiles can link to specific document styles.
+### Utilities
 
-**Context menu** — Right-click to insert headings, links, images, quotes, footnotes, code fences, mermaid fences, task lists, horizontal rules, and tables. Works in the canvas, source editor, and inside the edit panel's raw text area.
-
-**Copy control** — Configure whether copying from the canvas produces plain text (default) or source Markdown. Boundary `(+)` elements are never included in clipboard content.
+- **Spellcheck** — Red wavy underlines on misspelled words. Right-click to add to dictionary or ignore.
+- **Word count and statistics** — Word count in the bottom bar. "More Stats" modal with reading time, character counts, code lines, and dangling reference detection.
+- **Scroll sync** — Bidirectional block-anchor scroll synchronization between canvas and source editor.
 
 ## Installation
 
@@ -37,109 +59,75 @@ Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/item
 Or install from VSIX:
 
 ```
-code --install-extension wysee-md-0.9.0.vsix
+code --install-extension wysee-md-0.11.0.vsix
 ```
 
-## Usage
+## Quick start
 
-Open any `.md` file — it opens in the Wysee MD canvas by default.
+Open any `.md` file — it opens in the Wysee canvas by default.
 
-- **Double-click** a block to edit its raw Markdown with live preview
-- **Click** `(+)` between blocks to insert new content
-- **Right-click** for the Insert MD Block context menu
-- Use the title bar buttons for **Print**, **Save PDF**, **Style**, and **Source**
-- Toggle **Sync scroll** in the top bar to link canvas and source scrolling
+- **Double-click** a block to edit its raw Markdown
+- **Click (+)** between blocks to insert new content
+- **Right-click** for the Insert MD Block menu
+- Click **Export options…** in the bottom bar for print, PDF, or approval matrix export
+- Toggle **Sync scroll** to link canvas and source scrolling
 
-To open in the standard text editor instead, use `Open With...` and select Text Editor. Use the `Restore Built-in Default` command to revert file associations.
+To open in the standard text editor, use `Open With...` → Text Editor.
 
-## Settings
+## AI-assisted summaries
 
-| Setting | Default | Description |
-|---|---|---|
-| `wyseeMd.preview.editable` | `true` | Enable block editing in the canvas |
-| `wyseeMd.preview.syncScroll` | `true` | Bidirectional scroll synchronization |
-| `wyseeMd.preview.syntaxHighlight` | `true` | Enable syntax highlighting in code blocks |
-| `wyseeMd.preview.copyMode` | `plainText` | Copy mode: `plainText` or `sourceMarkdown` |
-| `wyseeMd.preview.insertRelativeToBlock` | `after` | Insert position: `before` or `after` |
-| `wyseeMd.preview.commitOnBlur` | `false` | Auto-save edits when focus leaves the panel |
-| `wyseeMd.style.active` | `__match-editor` | Active document style |
-| `wyseeMd.syntaxStyle.active` | `__match-editor-syntax` | Active syntax highlighting style |
-| `wyseeMd.printProfile.active` | `__default-pdf` | Active print profile |
-| `wyseeMd.spell.language` | `en-US` | Spellcheck language |
-| `wyseeMd.print.browserFamily` | `system` | Browser for print handoff |
-| `wyseeMd.trace.level` | `info` | Log verbosity |
+Open the configuration panel via the command palette: **Wysee: AI Config: Settings**, or via the "Configure AI…" entry in the export menu.
 
-See the full settings list in VS Code's Settings UI under "Wysee MD".
+The panel provides a form-first interface for model configuration, prompting, context settings, and output options. A collapsible raw YAML editor at the bottom is bidirectionally synced with the form and validates every field as you type. Changes are saved to `.wysee/ai-config.yaml` in your workspace root.
 
-## Document Styles
+Example configuration:
 
-Document styles control how Markdown elements appear in the canvas and print:
+```yaml
+models:
+  - name: Qwen3-Coder 30B
+    provider: ollama
+    model: qwen3-coder:30b
+    endpoint: http://localhost:11434/v1
+    auth: none
+    chatPath: chat
+    requestScheduling:
+      mode: sequential
+    options:
+      temperature: 0.3
+      maxTokens: 2000
 
-```json
-{
-  "id": "my-style",
-  "name": "My Style",
-  "syntaxStyle": "my-syntax",
-  "baseStyles": "font-family: Georgia, serif; line-height: 1.6; color: #333; background: #fff;",
-  "elementStyles": {
-    "h1": "font-size: 2em; font-weight: 700; border-bottom: 2px solid #333;",
-    "blockquote": "border-left: 3px solid #0366d6; padding-left: 1em; color: #555;",
-    "a": "color: #0366d6;"
-  }
-}
+  - name: GPT-4o Mini
+    provider: openai
+    model: gpt-4o-mini
+    endpoint: https://api.openai.com/v1
+    auth: bearer
+    apiKey: ${{ secrets.OPENAI_API_KEY }}
+    requestScheduling:
+      mode: parallel
+      maxConcurrent: 6
+
+activeModel: "Qwen3-Coder 30B"
+
+context:
+  sectionContext:
+    mode: fullMarkdown
+  hunkCommitProvenance: true
+  hunkCommitLimit: 10
+
+prompting:
+  template: default-review-summary
 ```
 
-## Syntax Styles
+Store secrets via the command palette: **Wysee: AI Config: Set Secret…**
 
-Syntax styles control code block coloring with per-language overrides:
+When exporting an approval matrix, a QuickPick lets you select a model or continue without AI. Summaries populate column C of the workbook. Cancel during generation to choose **Discard** or **Export with existing summaries**. AI failure never blocks the export.
 
-```json
-{
-  "id": "my-syntax",
-  "name": "My Syntax Theme",
-  "syntaxStyles": {
-    "default": {
-      "keyword": "color: #c678dd;",
-      "string": "color: #98c379;",
-      "comment": "color: #5c6370; font-style: italic;",
-      "function": "color: #61aeee;"
-    },
-    "python": {
-      "keyword": "color: #ff79c6;",
-      "string": "color: #f1fa8c;"
-    },
-    "yaml": { "highlight": false }
-  }
-}
-```
+Preview what the model receives: **Wysee: AI Config: Preview Prompt**
 
-## Print Profiles
-
-Print profiles control page layout for print and PDF output:
-
-```json
-{
-  "id": "my-print",
-  "name": "My Print Style",
-  "printStyle": "__light",
-  "format": "Letter",
-  "marginTop": "0.75in",
-  "marginRight": "0.75in",
-  "marginBottom": "0.75in",
-  "marginLeft": "0.75in",
-  "pageNumbers": {
-    "enabled": true,
-    "position": "center",
-    "style": "decimal",
-    "startAt": 1,
-    "suppressFirstPage": true
-  }
-}
-```
 
 ## Supported Markdown
 
-CommonMark/GFM basics, headings, paragraphs, lists (including nested and ordered), task lists, blockquotes, tables, links, images with `{width, align}` attribute syntax, fenced code blocks with syntax highlighting, mermaid fences, strikethrough, footnotes, and print directives (`<!-- wysee:page-break -->`).
+CommonMark/GFM basics, headings, paragraphs, lists (nested, ordered, task), blockquotes, tables, links, images with `{width, align}` attribute syntax, fenced code blocks with syntax highlighting, mermaid fences, strikethrough, footnotes, and print directives (`<!-- wysee:page-break -->`).
 
 ## Requirements
 
@@ -148,8 +136,10 @@ CommonMark/GFM basics, headings, paragraphs, lists (including nested and ordered
 
 ## License
 
-See [LICENSE.txt](LICENSE.txt).
+[Apache License 2.0](LICENSE.txt)
+
+Copyright 2025-2026 Grainpool Holdings LLC
 
 ---
 
-Developed by [Grainpool Holdings LLC](https://github.com/grainpool).
+📖 **[Full documentation](https://docs.grainpoolholdings.com/open-source-projects/wysee.html)** · Developed by [Grainpool Holdings LLC](https://github.com/grainpool)

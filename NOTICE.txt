@@ -1,0 +1,21 @@
+Wysee MD is licensed under the Business Source License 1.1 included in LICENSE.txt.
+
+Plain-English summary (not a substitute for the license):
+- You may use Wysee MD freely, including for internal and commercial
+  documentation work.
+- You may use it in public or private repositories, including commercial repos.
+- You may create and sell documentation or other work product produced with it.
+- You may not use Wysee MD itself as a hosted service, white-labeled product,
+  competing extension, competing review platform, or similar competing product
+  without a separate written license from Grainpool Holdings LLC.
+- On 2027-03-30, this version converts to GPL-3.0-or-later.
+
+No support, maintenance, SLA, indemnity, warranty, or service commitment is
+provided unless Grainpool Holdings LLC separately agrees in writing.
+
+All trademarks, service marks, logos, and product names of Grainpool Holdings
+LLC are reserved and are not licensed except as expressly required by
+LICENSE.txt.
+
+For commercial licensing inquiries:
+otoniel@grainpoolholdings.com

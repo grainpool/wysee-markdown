@@ -1,13 +1,13 @@
 {
   "name": "wysee-md",
-  "displayName": "Wysee MD",
-  "description": "WYSIWYG-style Markdown custom editor for VS Code and VSCodium.",
-  "version": "0.9.0",
+  "displayName": "Wysee Markdown",
+  "description": "WYSIWYG Markdown editor with print, rendered diff, intelligent change control, and advanced authoring features.",
+  "version": "0.11.0",
   "publisher": "grainpool",
   "author": {
     "name": "Grainpool Holdings LLC"
   },
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "license": "Apache-2.0",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -18,12 +18,21 @@
   ],
   "keywords": [
     "markdown",
+    "md",
     "wysiwyg",
-    "custom-editor",
+    "custom",
+    "diff",
+    "review",
+    "export",
+    "print",
+    "spreadsheet",
+    "themes",
+    "stylesheet",
+    "approval",
+    "pdf",
     "mermaid",
     "spellcheck",
-    "print",
-    "pdf"
+    "documentation"
   ],
   "main": "./out/extension.js",
   "extensionKind": [
@@ -49,54 +58,12 @@
       ]
     }
   },
-  "activationEvents": [
-    "onCustomEditor:grainpool.wysee-md.editor",
-    "onLanguage:markdown",
-    "onCommand:wyseeMd.print",
-    "onCommand:wyseeMd.exportPdf",
-    "onCommand:wyseeMd.exportHtml",
-    "onCommand:wyseeMd.theme.select",
-    "onCommand:wyseeMd.theme.saveCurrentAs",
-    "onCommand:wyseeMd.theme.manage",
-    "onCommand:wyseeMd.pageProfile.select",
-    "onCommand:wyseeMd.pageProfile.saveCurrentAs",
-    "onCommand:wyseeMd.pageProfile.manage",
-    "onCommand:wyseeMd.preview.toggleEditable",
-    "onCommand:wyseeMd.source.openToSide",
-    "onCommand:wyseeMd.editor.restoreBuiltInDefault",
-    "onCommand:wyseeMd.insertBlock.openMenu",
-    "onCommand:wyseeMd.insertBlock.heading1",
-    "onCommand:wyseeMd.insertBlock.heading2",
-    "onCommand:wyseeMd.insertBlock.link",
-    "onCommand:wyseeMd.insertBlock.image",
-    "onCommand:wyseeMd.insertBlock.quote",
-    "onCommand:wyseeMd.insertBlock.codeFence",
-    "onCommand:wyseeMd.insertBlock.hr",
-    "onCommand:wyseeMd.insertBlock.table2x2",
-    "onCommand:wyseeMd.insertBlock.tableAligned",
-    "onCommand:wyseeMd.insertBlock.tableCustom",
-    "onCommand:wyseeMd.insertBlock.taskList",
-    "onCommand:wyseeMd.insertBlock.mermaidFence",
-    "onCommand:wyseeMd.spell.addToUserDictionary",
-    "onCommand:wyseeMd.spell.addToWorkspaceDictionary",
-    "onCommand:wyseeMd.spell.ignoreWordSession",
-    "onCommand:wyseeMd.spell.ignoreWordDocument",
-    "onCommand:wyseeMd.spell.nextIssue",
-    "onCommand:wyseeMd.spell.previousIssue",
-    "onCommand:wyseeMd.dev.openLog",
-    "onCommand:wyseeMd.dev.inspectContext",
-    "onCommand:wyseeMd.dev.runSelfCheck",
-    "onCommand:wyseeMd.insertBlock.heading3",
-    "onCommand:wyseeMd.insertBlock.heading4",
-    "onCommand:wyseeMd.insertBlock.heading5",
-    "onCommand:wyseeMd.insertBlock.heading6",
-    "onCommand:wyseeMd.insertBlock.footnote"
-  ],
+  "activationEvents": [],
   "contributes": {
     "customEditors": [
       {
         "viewType": "grainpool.wysee-md.editor",
-        "displayName": "Wysee MD",
+        "displayName": "Wysee Markdown",
         "selector": [
           {
             "filenamePattern": "*.md"
@@ -135,12 +102,12 @@
       },
       {
         "command": "wyseeMd.theme.select",
-        "title": "Style\u2026",
+        "title": "Style…",
         "category": "Wysee MD"
       },
       {
         "command": "wyseeMd.theme.saveCurrentAs",
-        "title": "Save Current Style As\u2026",
+        "title": "Save Current Style As…",
         "category": "Wysee MD"
       },
       {
@@ -150,12 +117,12 @@
       },
       {
         "command": "wyseeMd.pageProfile.select",
-        "title": "Page Profile\u2026",
+        "title": "Page Profile…",
         "category": "Wysee MD"
       },
       {
         "command": "wyseeMd.pageProfile.saveCurrentAs",
-        "title": "Save Current Page Profile As\u2026",
+        "title": "Save Current Page Profile As…",
         "category": "Wysee MD"
       },
       {
@@ -180,7 +147,7 @@
       },
       {
         "command": "wyseeMd.insertBlock.openMenu",
-        "title": "Insert MD block\u2026",
+        "title": "Insert MD block…",
         "category": "Wysee MD"
       },
       {
@@ -317,12 +284,36 @@
         "command": "wyseeMd.openWithWysee",
         "title": "Open with Wysee",
         "icon": "$(notebook-render-output)"
+      },
+      {
+        "command": "wysee.exportApprovalMatrix",
+        "title": "Export Approval Matrix",
+        "category": "Wysee"
+      },
+      {
+        "command": "wysee.approvalMatrix.ai.settings",
+        "title": "AI Config: Open ai-config.yaml",
+        "category": "Wysee"
+      },
+      {
+        "command": "wysee.approvalMatrix.ai.setSecret",
+        "title": "AI Config: Set Secret…",
+        "category": "Wysee"
+      },
+      {
+        "command": "wysee.approvalMatrix.ai.clearSecret",
+        "title": "AI Config: Clear Secret…",
+        "category": "Wysee"
+      },
+      {
+        "command": "wysee.approvalMatrix.ai.previewPrompt",
+        "title": "Wysee: AI Config: Preview Prompt"
       }
     ],
     "submenus": [
       {
         "id": "wyseeMd.insertBlock",
-        "label": "Insert MD block\u2026"
+        "label": "Insert MD block…"
       },
       {
         "id": "wyseeMd.insertBlock.headings",
@@ -515,7 +506,7 @@
           "default": 1,
           "minimum": 1,
           "maximum": 6,
-          "description": "Heading depth used for the \u201cword count by section\u201d stats view. 1 means H1 sections, 6 means include H1-H6."
+          "description": "Heading depth used for the “word count by section” stats view. 1 means H1 sections, 6 means include H1-H6."
         },
         "wyseeMd.spell.language": {
           "type": "string",
@@ -644,6 +635,102 @@
           "type": "string",
           "default": "__match-editor-syntax",
           "description": "Active syntax highlighting style. Use the Style panel to browse and switch syntax themes."
+        },
+        "wysee.approvalMatrix.publishUrl": {
+          "type": "string",
+          "default": "",
+          "description": "The exact future URL of the exported review HTML file. Used to generate workbook hyperlinks."
+        },
+        "wysee.approvalMatrix.approvalStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Pending",
+            "Approved",
+            "Needs changes",
+            "Not applicable"
+          ],
+          "description": "Approval status options for the workbook dropdown column."
+        },
+        "wysee.approvalMatrix.hiddenColumns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "docPath",
+              "summary",
+              "screenshots",
+              "link",
+              "approval",
+              "comments"
+            ]
+          },
+          "default": [],
+          "description": "Columns to hide in the exported workbook. 'screenshots' is reserved for future use."
+        },
+        "wysee.approvalMatrix.changeIdPrefix": {
+          "type": "string",
+          "default": "",
+          "description": "Optional static prefix for change numbers (e.g. 'REL734-')."
+        },
+        "wysee.approvalMatrix.cardWidth": {
+          "type": "number",
+          "default": 720,
+          "minimum": 360,
+          "maximum": 960,
+          "description": "Width in pixels for exported diff card images (columns D and E)."
+        },
+        "wysee.approvalMatrix.cardMaxHeight": {
+          "type": "number",
+          "default": 2160,
+          "minimum": 200,
+          "maximum": 2160,
+          "description": "Maximum height in pixels for exported diff card images. Cards taller than this are truncated with a review link footer."
+        },
+        "wysee.approvalMatrix.defaultPreviousRevision": {
+          "type": "string",
+          "default": "most-recent-commit",
+          "description": "Default previous-version token for approval matrix export. Use most-recent-commit or a commit hash."
+        },
+        "wysee.approvalMatrix.defaultNewRevision": {
+          "type": "string",
+          "default": "current-changes",
+          "description": "Default new-version token for approval matrix export. Use current-changes, most-recent-commit, or a commit hash."
+        },
+        "wysee.approvalMatrix.ai.enabledByDefault": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether AI-assisted summaries are enabled by default in the export dialog."
+        },
+        "wysee.approvalMatrix.ai.activeProfile": {
+          "type": "string",
+          "default": "",
+          "description": "ID of the active AI profile used for summary generation."
+        },
+        "wysee.approvalMatrix.ai.profiles": {
+          "type": "array",
+          "default": [],
+          "description": "AI summary profile definitions (secrets stored separately in SecretStorage).",
+          "items": {
+            "type": "object"
+          }
+        },
+        "wysee.approvalMatrix.ai.manifestPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to repository/document manifest JSON file for AI context enrichment."
+        },
+        "wysee.approvalMatrix.ai.allowReducedContextMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow AI summaries to proceed in reduced-context mode when manifest data is unavailable."
+        },
+        "wysee.approvalMatrix.ai.blankSummaryOnFailure": {
+          "type": "boolean",
+          "default": true,
+          "description": "Leave column C blank when AI fails, rather than inserting error text."
         }
       }
     },
@@ -688,6 +775,8 @@
     "publish:marketplace": "vsce publish --allow-missing-repository"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
     "katex": "^0.16.22",
     "linkedom": "^0.18.12",
     "markdown-it": "^14.1.0",

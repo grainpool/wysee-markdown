@@ -1,3 +1,17 @@
+// Copyright 2025-2026 Grainpool Holdings LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import * as vscode from 'vscode';
 import { CTX, EXT_ID, MARKDOWN_PATTERNS, STORAGE, VIEWTYPE_EDITOR } from './constants';
 import { TraceService } from './diagnostics/trace';
@@ -14,6 +28,11 @@ import { BrowserPrintTransportManager } from './print/browserPrintTransportManag
 import { ExternalPrintServer } from './print/externalPrintServer';
 import { PrintBundleService } from './print/printBundleService';
 import { ExportHtmlService } from './export/exportHtmlService';
+import { ApprovalMatrixOrchestrator } from './export/approvalMatrix/approvalMatrixOrchestrator';
+import { registerApprovalMatrixCommand } from './export/approvalMatrix/approvalMatrixCommand';
+import { AiSecretStore } from './export/approvalMatrix/ai/aiSecretStore';
+import { AiConfigService } from './export/approvalMatrix/ai/aiConfigService';
+import { AiSummaryService } from './export/approvalMatrix/ai/aiSummaryService';
 import { ContextInspector } from './diagnostics/contextInspector';
 import { SelfCheckService } from './diagnostics/selfCheck';
 import { StyleManager } from './style/styleManager';
@@ -47,6 +66,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const selfCheck = new SelfCheckService(context, provider, themeService, pageProfileService, spellService, printServer, transportManager);
   const insertTemplateService = new InsertTemplateService(trace);
   const stylePanel = new StylePanelProvider(context, styleManager, trace, () => provider.refreshAll());
+
+  // Approval matrix export + AI
+  const aiSecretStore = new AiSecretStore(context.secrets);
+  const aiConfigService = new AiConfigService(aiSecretStore);
+  const aiSummaryService = new AiSummaryService(aiConfigService, trace);
+  const approvalMatrixOrchestrator = new ApprovalMatrixOrchestrator(provider, renderer, trace, aiConfigService, aiSummaryService);
+  registerApprovalMatrixCommand(context, approvalMatrixOrchestrator);
+
+  // Lazy-load panel to avoid circular dependency
+  let aiConfigPanel: any;
+  context.subscriptions.push(
+    vscode.commands.registerCommand('wysee.approvalMatrix.ai.settings', async () => {
+      if (!aiConfigPanel) {
+        const { AiConfigPanelProvider } = await import('./export/approvalMatrix/ai/aiConfigPanelProvider');
+        aiConfigPanel = new AiConfigPanelProvider(context, aiConfigService, aiSecretStore);
+      }
+      await aiConfigPanel.open();
+    }),
+    vscode.commands.registerCommand('wysee.approvalMatrix.ai.setSecret', () => aiSecretStore.setSecretInteractive()),
+    vscode.commands.registerCommand('wysee.approvalMatrix.ai.clearSecret', () => aiSecretStore.clearSecretInteractive()),
+    vscode.commands.registerCommand('wysee.approvalMatrix.ai.previewPrompt', async () => {
+      const { previewPrompt } = await import('./export/approvalMatrix/ai/aiPromptCompiler');
+      const config = await aiConfigService.readConfigRaw();
+      const compiled = previewPrompt(config);
+      const content = `# AI Prompt Preview\n\n## System Message\n\n\`\`\`\n${compiled.systemMessage}\n\`\`\`\n\n## User Message\n\n\`\`\`\n${compiled.userMessage}\n\`\`\`\n`;
+      const doc = await vscode.workspace.openTextDocument({ content, language: 'markdown' });
+      await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+    }),
+  );
 
   context.subscriptions.push(
     vscode.languages.registerCodeActionsProvider({ language: 'markdown' }, new SpellCodeActionProvider(spellService), {

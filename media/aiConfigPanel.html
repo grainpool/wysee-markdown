@@ -1,0 +1,349 @@
+<!-- Copyright 2025-2026 Grainpool Holdings LLC
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+         http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License. -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--vscode-font-family,-apple-system,BlinkMacSystemFont,sans-serif);font-size:var(--vscode-font-size,13px);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:1rem;line-height:1.5}
+h2{font-size:1.05em;font-weight:600;margin:1.2rem 0 .4rem;border-bottom:1px solid var(--vscode-widget-border,#3c3c3c);padding-bottom:.25rem}
+.f{display:flex;align-items:center;gap:.5rem;margin:.35rem 0;min-height:1.8rem}
+.f>label{flex:0 0 130px;font-size:.85em;font-weight:500;opacity:.8;text-align:right;white-space:nowrap}
+.f>input,.f>select,.f>textarea{flex:1;padding:.3rem .45rem;border:1px solid var(--vscode-input-border,#3c3c3c);background:var(--vscode-input-background,#1e1e1e);color:var(--vscode-input-foreground,#ccc);border-radius:3px;font-family:inherit;font-size:inherit}
+.f>textarea{min-height:2.6rem;resize:vertical;font-family:var(--vscode-editor-font-family,monospace);font-size:.9em}
+.f>input:focus,.f>select:focus,.f>textarea:focus{outline:none;border-color:var(--vscode-focusBorder,#007acc)}
+.f>input[type="number"]{max-width:100px}
+.t{display:flex;align-items:center;gap:.4rem;margin:.3rem 0 .3rem 140px}
+.t>input[type="checkbox"]{width:auto;margin:0}
+.t>label{font-size:.85em;opacity:.85;cursor:pointer}
+.fp{display:flex;gap:1rem}
+.fp .f{flex:1}
+.fp .f>label{flex:0 0 90px}
+.btn{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .7rem;background:var(--vscode-button-background,#0e639c);color:var(--vscode-button-foreground,#fff);border:none;border-radius:3px;cursor:pointer;font-size:.85em;font-weight:500}
+.btn:hover{background:var(--vscode-button-hoverBackground,#1177bb)}
+.bs{background:var(--vscode-button-secondaryBackground,#3a3d41);color:var(--vscode-button-secondaryForeground,#ccc)}
+.bs:hover{background:var(--vscode-button-secondaryHoverBackground,#45494e)}
+.btn-del{background:transparent;color:var(--vscode-errorForeground,#c44);border:1px solid var(--vscode-errorForeground,#c44);padding:.25rem .6rem;font-size:.82em;cursor:pointer;border-radius:3px}
+.btn-del:hover{background:var(--vscode-errorForeground,#c44);color:#fff}
+.btn-close{background:transparent;color:var(--vscode-foreground);border:1px solid var(--vscode-widget-border,#3c3c3c);padding:.25rem .6rem;font-size:.82em;cursor:pointer;border-radius:3px;opacity:.7}
+.btn-close:hover{opacity:1}
+.br{display:flex;gap:.5rem;margin:.5rem 0;flex-wrap:wrap}
+.mc{border:1px solid var(--vscode-widget-border,#3c3c3c);border-radius:5px;margin:.4rem 0;overflow:hidden}
+.mc-hdr{display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;cursor:pointer;user-select:none}
+.mc-hdr:hover{background:var(--vscode-list-hoverBackground,#2a2d2e)}
+.mc-hdr::before{content:'\25B6';font-size:.6em;margin-right:.4rem;transition:transform .15s;opacity:.6}
+.mc.open .mc-hdr::before{transform:rotate(90deg)}
+.mc-title{font-weight:600;font-size:.92em}
+.mc-body{display:none;padding:.4rem .75rem .6rem}
+.mc.open .mc-body{display:block}
+.mc-actions{display:flex;gap:.4rem;margin-top:.6rem;align-items:center}
+.btn-sp{padding:.25rem .6rem;font-size:.82em;border-radius:3px;border:none;cursor:pointer;font-weight:500}
+.btn-sp.dirty{background:var(--vscode-button-background,#0e639c);color:var(--vscode-button-foreground,#fff)}
+.btn-sp.dirty:hover{background:var(--vscode-button-hoverBackground,#1177bb)}
+.btn-sp.clean{background:var(--vscode-button-secondaryBackground,#3a3d41);color:var(--vscode-button-secondaryForeground,#999);cursor:default}
+.ch{cursor:pointer;user-select:none;display:flex;align-items:center;gap:.3rem}
+.ch::before{content:'\25B6';font-size:.65em;transition:transform .15s}
+.ch.op::before{transform:rotate(90deg)}
+.cb{display:none}
+.cb.op{display:block}
+#ye{width:100%;min-height:14rem;font-family:var(--vscode-editor-font-family,monospace);font-size:.85em;white-space:pre;tab-size:2;resize:vertical;padding:.4rem .5rem;border:1px solid var(--vscode-input-border,#3c3c3c);background:var(--vscode-input-background,#1e1e1e);color:var(--vscode-input-foreground,#ccc);border-radius:3px}
+#ye:focus{outline:none;border-color:var(--vscode-focusBorder,#007acc)}
+#ye.invalid{border-color:var(--vscode-errorForeground,#c44) !important}
+.yerr{color:var(--vscode-errorForeground,#f44);font-size:.8em;margin:.3rem 0;display:none;white-space:pre-wrap}
+.yerr.v{display:block}
+.bar{position:sticky;top:0;z-index:10;background:var(--vscode-editor-background);padding:.5rem 0 .4rem;border-bottom:1px solid var(--vscode-widget-border,#3c3c3c);margin-bottom:.4rem;display:flex;justify-content:space-between;align-items:center}
+.bst{font-size:.8em;opacity:.6;margin-left:.4rem}
+</style></head><body>
+<div class="bar"><div><button class="btn" id="bs">Save</button><span class="bst" id="ss"></span></div><div class="br" style="margin:0"><button class="btn bs" id="bp">Preview Prompt</button><button class="btn bs" id="bk">Set Secret&#x2026;</button></div></div>
+<h2>Models</h2><div id="mc"></div><div class="br"><button class="btn bs" id="ba">+ Add Model</button></div>
+<div class="f"><label>Active Model</label><select id="am"></select></div>
+<h2>Prompting</h2>
+<div class="f"><label>Template</label><select id="pt">{{TEMPLATE_OPTIONS}}</select></div>
+<div class="f"><label>Preamble</label><textarea id="pp" rows="2" placeholder="Prepended to system message&#x2026;"></textarea></div>
+<div class="f"><label>Postamble</label><textarea id="po" rows="2" placeholder="Appended to system message&#x2026;"></textarea></div>
+<div class="f"><label>User Appendix</label><textarea id="pa" rows="2" placeholder="Appended after excerpts&#x2026;"></textarea></div>
+<h2>Context</h2>
+<div class="f"><label>Section Mode</label><select id="cm"><option value="fullMarkdown">Full markdown</option><option value="headingOnly">Heading only</option><option value="off">Off</option></select></div>
+<div class="t"><input type="checkbox" id="co"><label for="co">Include heading outline</label></div>
+<div class="fp"><div class="f"><label>Outline Depth</label><input type="number" id="cd" min="1" max="6" value="2"></div><div class="f"><label>Commit Limit</label><input type="number" id="cl" min="1" max="24" value="10"></div></div>
+<div class="t"><input type="checkbox" id="cr" checked><label for="cr">Include revision commit messages</label></div>
+<div class="t"><input type="checkbox" id="cg" checked><label for="cg">Include revision tags</label></div>
+<div class="t"><input type="checkbox" id="cp" checked><label for="cp">Include hunk commit provenance</label></div>
+<h2>Output</h2>
+<div class="t"><input type="checkbox" id="ob" checked><label for="ob">Show [summary] placeholder on failure</label></div>
+<h2 class="ch" id="yt">Raw YAML</h2>
+<div class="cb" id="ys"><div class="yerr" id="yr"></div><textarea id="ye" spellcheck="false"></textarea></div>
+<script>
+(function(){
+  var V = acquireVsCodeApi(), C = null, fF = false, fY = false;
+  var mc = document.getElementById('mc');
+  var am = document.getElementById('am');
+  var ye = document.getElementById('ye');
+  var yr = document.getElementById('yr');
+  var ss = document.getElementById('ss');
+  var cardDirty = {};
+  var openCards = {};
+  function $(id) { return document.getElementById(id); }
+  function E(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function D(fn, ms) { var t; return function() { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  function pJ(s) { if (!s || !s.trim()) return undefined; try { return JSON.parse(s); } catch(e) { return undefined; } }
+
+  $('bs').onclick = function() { V.postMessage({ type: 'saveYaml', yaml: ye.value }); };
+  $('bp').onclick = function() { V.postMessage({ type: 'previewPrompt' }); };
+  $('bk').onclick = function() { V.postMessage({ type: 'setSecret' }); };
+  $('ba').onclick = function() {
+    if (!C) C = { models: [], activeModel: '' };
+    var idx = C.models.length;
+    C.models.push({ name: 'New Model ' + (idx + 1), provider: 'ollama', model: '', endpoint: 'http://localhost:11434/v1', auth: 'none', requestScheduling: { mode: 'sequential' }, options: { temperature: 0.3, maxTokens: 2000 } });
+    cardDirty[idx] = true;
+    openCards[idx] = true;
+    rM(); f2y();
+  };
+
+  $('yt').onclick = function() { this.classList.toggle('op'); $('ys').classList.toggle('op'); };
+
+  var yd = null;
+  ye.addEventListener('input', function() {
+    if (fF) return;
+    clearTimeout(yd);
+    yd = setTimeout(function() { V.postMessage({ type: 'parseYaml', yaml: ye.value }); }, 400);
+    ss.textContent = 'Unsaved changes';
+  });
+
+  function f2y() {
+    if (fY) return;
+    C = rF();
+    fF = true;
+    ye.value = toY(C);
+    fF = false;
+    ss.textContent = 'Unsaved changes';
+    yr.classList.remove('v');
+    ye.classList.remove('invalid');
+  }
+
+  function rF() {
+    var ms = [];
+    mc.querySelectorAll('.mc').forEach(function(d) {
+      var v = function(sel) { return (d.querySelector(sel) || {}).value || ''; };
+      var n = function(sel, df) { return parseFloat((d.querySelector(sel) || {}).value || df) || df; };
+      var rb = pJ(v('.rb'));
+      var m = {
+        name: v('.vn'), provider: v('.vp'), model: v('.vi'), endpoint: v('.ve'),
+        auth: v('.va'), chatPath: v('.vc') || undefined,
+        requestScheduling: { mode: v('.vs') || 'sequential', maxConcurrent: v('.vs') === 'parallel' ? n('.vm', 3) : undefined },
+        options: { temperature: n('.vt', 0.3), maxTokens: n('.vx', 2000), timeout: n('.vo', 30000) }
+      };
+      if (rb) m.requestBody = rb;
+      ms.push(m);
+    });
+    return {
+      models: ms, activeModel: am.value,
+      context: { sectionContext: { mode: $('cm').value }, includeHeadingOutline: $('co').checked, headingOutlineDepth: +$('cd').value || 2, selectedRevisionMessages: $('cr').checked, selectedRevisionTags: $('cg').checked, hunkCommitProvenance: $('cp').checked, hunkCommitLimit: Math.min(+$('cl').value || 10, 24), customFields: {} },
+      prompting: { template: $('pt').value, preamble: $('pp').value, postamble: $('po').value, userAppendix: $('pa').value },
+      output: { blankOnFailure: $('ob').checked }
+    };
+  }
+
+  function rM() {
+    mc.innerHTML = '';
+    if (!C || !C.models) return;
+    C.models.forEach(function(m, i) {
+      var dirty = !!cardDirty[i];
+      var isOpen = !!openCards[i];
+      var d = document.createElement('div');
+      d.className = 'mc' + (isOpen ? ' open' : '');
+      d.innerHTML =
+        '<div class="mc-hdr" data-tog="' + i + '"><span class="mc-title">' + E(m.name || 'Unnamed') + '</span></div>' +
+        '<div class="mc-body">' +
+        '<div class="f"><label>Name</label><input class="vn" value="' + E(m.name || '') + '"></div>' +
+        '<div class="f"><label>Provider</label><input class="vp" value="' + E(m.provider || '') + '"></div>' +
+        '<div class="f"><label>Model ID</label><input class="vi" value="' + E(m.model || '') + '"></div>' +
+        '<div class="f"><label>Endpoint</label><input class="ve" value="' + E(m.endpoint || '') + '"></div>' +
+        '<div class="f"><label>Auth</label><select class="va"><option value="none"' + (m.auth === 'none' ? ' selected' : '') + '>None</option><option value="bearer"' + (m.auth === 'bearer' ? ' selected' : '') + '>Bearer</option><option value="custom-header"' + (m.auth === 'custom-header' ? ' selected' : '') + '>Custom header</option></select></div>' +
+        '<div class="f"><label>Chat Path</label><input class="vc" value="' + E(m.chatPath || '') + '" placeholder="chat/completions"></div>' +
+        '<div class="f"><label>Scheduling</label><select class="vs"><option value="sequential"' + ((!m.requestScheduling || m.requestScheduling.mode === 'sequential') ? ' selected' : '') + '>Sequential</option><option value="parallel"' + (m.requestScheduling && m.requestScheduling.mode === 'parallel' ? ' selected' : '') + '>Parallel</option></select></div>' +
+        '<div class="f"><label>Max Concurrent</label><input type="number" class="vm" min="1" max="12" value="' + (m.requestScheduling && m.requestScheduling.maxConcurrent || 3) + '"></div>' +
+        '<div class="f"><label>Temperature</label><input type="number" class="vt" step="0.1" min="0" max="2" value="' + (m.options && m.options.temperature != null ? m.options.temperature : 0.3) + '"></div>' +
+        '<div class="f"><label>Max Tokens</label><input type="number" class="vx" min="64" max="8192" value="' + (m.options && m.options.maxTokens || 2000) + '"></div>' +
+        '<div class="f"><label>Timeout (ms)</label><input type="number" class="vo" min="1000" max="120000" value="' + (m.options && m.options.timeout || 30000) + '"></div>' +
+        '<div class="f"><label>Request Body</label><textarea class="rb" rows="2" placeholder=\'{ "stream": false }\'>' + (m.requestBody ? E(JSON.stringify(m.requestBody, null, 2)) : '') + '</textarea></div>' +
+        '<div class="mc-actions">' +
+        '<button class="btn-sp ' + (dirty ? 'dirty' : 'clean') + '" data-s="' + i + '">' + (dirty ? 'Save Profile' : 'Model Profile Saved') + '</button>' +
+        '<button class="btn-del" data-r="' + i + '">Delete Profile</button>' +
+        '<button class="btn-close" data-c="' + i + '">Close</button>' +
+        '</div></div>';
+      mc.appendChild(d);
+    });
+
+    // Toggle open/close on header click
+    mc.querySelectorAll('[data-tog]').forEach(function(h) {
+      h.onclick = function(e) {
+        var idx = +h.dataset.tog;
+        openCards[idx] = !openCards[idx];
+        h.parentElement.classList.toggle('open');
+      };
+    });
+
+    // Save Profile
+    mc.querySelectorAll('[data-s]').forEach(function(b) {
+      b.onclick = function() { cardDirty[+b.dataset.s] = false; f2y(); uBtns(); };
+    });
+
+    // Delete Profile — via extension host modal
+    mc.querySelectorAll('[data-r]').forEach(function(b) {
+      b.onclick = function() {
+        var idx = +b.dataset.r;
+        var name = C.models[idx] ? C.models[idx].name : 'this model';
+        V.postMessage({ type: 'confirmDelete', index: idx, name: name });
+      };
+    });
+
+    // Close — collapse card
+    mc.querySelectorAll('[data-c]').forEach(function(b) {
+      b.onclick = function() {
+        var idx = +b.dataset.c;
+        openCards[idx] = false;
+        b.closest('.mc').classList.remove('open');
+      };
+    });
+
+    // Field changes mark card dirty
+    mc.querySelectorAll('.mc').forEach(function(card, i) {
+      card.querySelectorAll('.mc-body input,.mc-body select,.mc-body textarea').forEach(function(e) {
+        var markDirty = function() { cardDirty[i] = true; uBtns(); f2y(); };
+        e.onchange = markDirty;
+        e.oninput = D(markDirty, 300);
+      });
+    });
+    uA();
+  }
+
+  function uBtns() {
+    mc.querySelectorAll('[data-s]').forEach(function(b) {
+      var idx = +b.dataset.s;
+      if (cardDirty[idx]) { b.className = 'btn-sp dirty'; b.textContent = 'Save Profile'; }
+      else { b.className = 'btn-sp clean'; b.textContent = 'Model Profile Saved'; }
+    });
+  }
+
+  function uA() {
+    var ns = (C && C.models || []).map(function(m) { return m.name; }).filter(Boolean);
+    am.innerHTML = '<option value="">None</option>' + ns.map(function(n) { return '<option value="' + E(n) + '"' + (n === C.activeModel ? ' selected' : '') + '>' + E(n) + '</option>'; }).join('');
+  }
+
+  function toY(c) {
+    var L = ['models:'];
+    if (c.models && c.models.length) {
+      c.models.forEach(function(m) {
+        L.push('  - name: ' + Q(m.name), '    provider: ' + Q(m.provider), '    model: ' + Q(m.model), '    endpoint: ' + Q(m.endpoint), '    auth: ' + m.auth);
+        if (m.chatPath) L.push('    chatPath: ' + Q(m.chatPath));
+        if (m.requestScheduling) {
+          L.push('    requestScheduling:', '      mode: ' + m.requestScheduling.mode);
+          if (m.requestScheduling.mode === 'parallel' && m.requestScheduling.maxConcurrent) L.push('      maxConcurrent: ' + m.requestScheduling.maxConcurrent);
+        }
+        if (m.options) {
+          L.push('    options:');
+          if (m.options.temperature != null) L.push('      temperature: ' + m.options.temperature);
+          if (m.options.maxTokens) L.push('      maxTokens: ' + m.options.maxTokens);
+          if (m.options.timeout) L.push('      timeout: ' + m.options.timeout);
+        }
+        if (m.requestBody) {
+          L.push('    requestBody:');
+          Object.keys(m.requestBody).forEach(function(k) { var v = m.requestBody[k]; L.push('      ' + k + ': ' + (typeof v === 'object' ? JSON.stringify(v) : v)); });
+        }
+      });
+    } else { L.push('  []'); }
+    L.push('', 'activeModel: ' + Q(c.activeModel || ''));
+    L.push('', 'context:', '  sectionContext:', '    mode: ' + (c.context && c.context.sectionContext && c.context.sectionContext.mode || 'fullMarkdown'));
+    L.push('  includeHeadingOutline: ' + (c.context && c.context.includeHeadingOutline || false));
+    L.push('  headingOutlineDepth: ' + (c.context && c.context.headingOutlineDepth || 2));
+    L.push('  selectedRevisionMessages: ' + (c.context ? c.context.selectedRevisionMessages !== false : true));
+    L.push('  selectedRevisionTags: ' + (c.context ? c.context.selectedRevisionTags !== false : true));
+    L.push('  hunkCommitProvenance: ' + (c.context ? c.context.hunkCommitProvenance !== false : true));
+    L.push('  hunkCommitLimit: ' + Math.min(c.context && c.context.hunkCommitLimit || 10, 24));
+    L.push('  customFields: {}');
+    L.push('', 'prompting:', '  template: ' + (c.prompting && c.prompting.template || 'default-review-summary'));
+    L.push('  preamble: ' + Q(c.prompting && c.prompting.preamble || ''));
+    L.push('  postamble: ' + Q(c.prompting && c.prompting.postamble || ''));
+    L.push('  userAppendix: ' + Q(c.prompting && c.prompting.userAppendix || ''));
+    L.push('', 'output:', '  blankOnFailure: ' + (c.output ? c.output.blankOnFailure !== false : true), '');
+    return L.join('\n');
+  }
+
+  function Q(s) {
+    if (s && (/[:#"'{}\n]/.test(s) || s === '')) return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"';
+    return s || '""';
+  }
+
+  function pF(c) {
+    if (!c) return;
+    C = c;
+    cardDirty = {};
+    rM();
+    $('pt').value = c.prompting && c.prompting.template || 'default-review-summary';
+    $('pp').value = c.prompting && c.prompting.preamble || '';
+    $('po').value = c.prompting && c.prompting.postamble || '';
+    $('pa').value = c.prompting && c.prompting.userAppendix || '';
+    var cx = c.context || {};
+    var sc = cx.sectionContext;
+    $('cm').value = (sc && typeof sc === 'object' ? sc.mode : sc) || 'fullMarkdown';
+    $('co').checked = cx.includeHeadingOutline || false;
+    $('cd').value = cx.headingOutlineDepth || 2;
+    $('cr').checked = cx.selectedRevisionMessages !== false;
+    $('cg').checked = cx.selectedRevisionTags !== false;
+    $('cp').checked = cx.hunkCommitProvenance !== false;
+    $('cl').value = Math.min(cx.hunkCommitLimit || 10, 24);
+    $('ob').checked = c.output ? c.output.blankOnFailure !== false : true;
+  }
+
+  ['pt','pp','po','pa','cm','co','cd','cr','cg','cp','cl','ob','am'].forEach(function(id) {
+    var e = $(id);
+    if (e) { e.onchange = f2y; if (e.tagName === 'TEXTAREA' || e.tagName === 'INPUT') e.oninput = D(f2y, 300); }
+  });
+
+  window.addEventListener('message', function(ev) {
+    var m = ev.data;
+    if (m.type === 'loadConfig') {
+      fY = true; pF(m.config); ye.value = toY(m.config || {}); fY = false; ss.textContent = '';
+      ye.classList.remove('invalid'); yr.classList.remove('v');
+    } else if (m.type === 'parsedConfig') {
+      if (m.error) {
+        yr.textContent = m.error; yr.classList.add('v'); ye.classList.add('invalid');
+        return;
+      }
+      // Show field-level validation errors
+      if (m.errors && m.errors.length > 0) {
+        yr.textContent = m.errors.join('\n'); yr.classList.add('v'); ye.classList.add('invalid');
+      } else {
+        yr.classList.remove('v'); ye.classList.remove('invalid');
+      }
+      fY = true; pF(m.config); C = m.config; fY = false;
+    } else if (m.type === 'saved') {
+      ss.textContent = 'Saved';
+      setTimeout(function() { if (ss.textContent === 'Saved') ss.textContent = ''; }, 2000);
+    } else if (m.type === 'deleteConfirmed') {
+      var idx = m.index;
+      C.models.splice(idx, 1);
+      var nd = {};
+      Object.keys(cardDirty).forEach(function(k) { var ki = +k; if (ki < idx) nd[ki] = cardDirty[ki]; else if (ki > idx) nd[ki - 1] = cardDirty[ki]; });
+      cardDirty = nd;
+      var no = {};
+      Object.keys(openCards).forEach(function(k) { var ki = +k; if (ki < idx) no[ki] = openCards[ki]; else if (ki > idx) no[ki - 1] = openCards[ki]; });
+      openCards = no;
+      rM(); uA(); f2y();
+    }
+  });
+
+  V.postMessage({ type: 'ready' });
+})();
+</script></body></html>

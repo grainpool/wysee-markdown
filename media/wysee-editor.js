@@ -1,3 +1,17 @@
+// Copyright 2025-2026 Grainpool Holdings LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 (() => {
   const vscode = acquireVsCodeApi();
   const root = document.getElementById('wysee-root');
@@ -14,6 +28,8 @@
   const findHighlightAllCheckbox = document.getElementById('wysee-find-highlight-all');
   const findMatchCaseCheckbox = document.getElementById('wysee-find-match-case');
   const findMatchMarkdownCheckbox = document.getElementById('wysee-find-match-markdown');
+  const exportMenuBtn = document.getElementById('wysee-export-menu-btn');
+  const exportOverlay = document.getElementById('wysee-export-overlay');
   const themeStyle = document.createElement('style');
   themeStyle.id = 'wysee-theme-style';
   document.head.appendChild(themeStyle);
@@ -88,12 +104,6 @@
       }
       return;
     }
-    const collapseLink = e.target.closest('.wysee-diff-collapse-link');
-    if (collapseLink) {
-      e.stopPropagation();
-      toggleCollapseUnchanged();
-      return;
-    }
     // Click on a placeholder or deletion marker → move nav to its parent hunk
     const diffEl = e.target.closest('.wysee-diff-placeholder, .wysee-diff-deletion-marker');
     if (diffEl && state.diff?.hunks?.length) {
@@ -117,6 +127,27 @@
 
   moreStatsButton?.addEventListener('click', () => {
     openStatsModal();
+  });
+
+  // ── Export options popup ──
+  exportMenuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    exportOverlay?.classList.toggle('is-visible');
+  });
+  exportOverlay?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-wysee-action]');
+    if (btn) {
+      const action = btn.dataset.wyseeAction;
+      if (action) {
+        vscode.postMessage({ type: 'exportAction', action });
+      }
+      exportOverlay.classList.remove('is-visible');
+      return;
+    }
+    // Click on backdrop closes the popup
+    if (e.target === exportOverlay) {
+      exportOverlay.classList.remove('is-visible');
+    }
   });
 
   findPrevButton?.addEventListener('mousedown', (e) => {
@@ -1134,35 +1165,14 @@ ${msg.model.syntaxCss || ''}`;
   }
 
   function applyCollapseState() {
-    // Remove existing collapse separators and collapse link
+    // Remove existing collapse separators
     root.querySelectorAll('.wysee-unchanged-collapse').forEach((el) => el.remove());
-    root.querySelectorAll('.wysee-diff-collapse-link').forEach((el) => el.remove());
     // Uncollapse everything first
     root.querySelectorAll('.is-collapsed-unchanged').forEach((el) => {
       el.classList.remove('is-collapsed-unchanged');
     });
 
-    const runs = state.diff?.unchangedRuns;
-    const hasCollapsible = runs && runs.some((r) => r.collapsible);
-
-    // Add collapse toggle to the sync bar if we have collapsible content
-    if (hasCollapsible && state.diff) {
-      const syncBarRight = document.querySelector('.wysee-sync-bar-right');
-      if (syncBarRight && !syncBarRight.querySelector('.wysee-diff-collapse-link')) {
-        const link = document.createElement('button');
-        link.className = 'wysee-diff-collapse-link';
-        link.textContent = state.diffCollapsed ? 'Expand unchanged' : 'Collapse unchanged';
-        link.type = 'button';
-        syncBarRight.appendChild(link);
-      } else {
-        const existing = syncBarRight?.querySelector('.wysee-diff-collapse-link');
-        if (existing) {
-          existing.textContent = state.diffCollapsed ? 'Expand unchanged' : 'Collapse unchanged';
-        }
-      }
-    }
-
-    if (!state.diffCollapsed || !runs) return;
+    if (!state.diffCollapsed || !state.diff?.unchangedRuns) return;
 
     const CONTEXT = 2;
 
