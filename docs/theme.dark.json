@@ -1,0 +1,27 @@
+{
+  "id": "wysee-split-dark",
+  "name": "Wysee Split Dark",
+  "baseStyles": "font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.75; color: #dde5f2; background: #0d1117;",
+  "elementStyles": {
+    "h1": "font-size: 1.85em; font-weight: 700; margin: 0 0 0.5em 0; border-bottom: 2px solid #7070bb; padding-bottom: 0.3em; color: #dce1ff;",
+    "h2": "font-size: 1.3em; font-weight: 700; margin: 1.4em 0 0.4em 0; border-bottom: 1px solid #2d3559; padding-bottom: 0.2em; color: #9fa6ff;",
+    "h3": "font-size: 1.1em; font-weight: 700; font-style: normal; margin: 1em 0 0.3em 0; color: #aeb5ff;",
+    "h4": "font-size: 1em; font-weight: 700; margin: 0.8em 0 0.3em 0; color: #9aa6c4; text-transform: uppercase; letter-spacing: 0.05em;",
+    "p": "margin: 0 0 0.9em 0;",
+    "a": "color: #67b3ff; text-decoration: underline; text-underline-offset: 2px;",
+    "blockquote": "border-left: 3px solid #7070bb; padding: 0.3em 0 0.3em 1.2em; margin: 1em 0; color: #aeb8ca; font-style: italic; background: rgba(112,112,187,0.12); border-radius: 0 4px 4px 0;",
+    "hr": "border: none; border-top: 1px solid #2d3559; margin: 2em 0;",
+    "ul": "padding-left: 1.4em; margin: 0.5em 0 0.9em 0;",
+    "ol": "padding-left: 1.4em; margin: 0.5em 0 0.9em 0;",
+    "li": "margin-bottom: 0.3em;",
+    "table": "width: 100%; border-collapse: collapse; margin: 1.2em 0; font-size: 0.94em; background: #121826; border: 1px solid #2d3559; border-radius: 6px;",
+    "thead": "background: #31377a; color: #ffffff;",
+    "th": "font-weight: 700; text-align: left; padding: 0.55em 0.9em; font-size: 0.9em; letter-spacing: 0.02em;",
+    "td": "padding: 0.5em 0.9em; border-bottom: 1px solid #2d3559; color: #dde5f2;",
+    "tableOddRow": "background: rgba(196,200,239,0.06);",
+    "tableEvenRow": "background: #121826;",
+    "codeInline": "font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.88em; background: #161d2e; color: #ffb35c; padding: 0.15em 0.4em; border-radius: 3px; border: 1px solid #31377a;",
+    "pre": "background: #090c12; border: 1px solid #2b3550; border-radius: 8px; padding: 1em 1.2em; overflow-x: auto; margin: 1em 0;",
+    "codeBlock": "font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.88em; color: #dbe8f8;"
+  }
+}

@@ -1,0 +1,1177 @@
+
+#!/usr/bin/env python3
+"""
+wysee_mkdocsify.py
+
+Single-entry build script for turning one master Markdown file into a
+Material for MkDocs documentation site.
+
+Default project layout:
+
+    project/
+      master.md
+      theme.light.json
+      theme.dark.json
+      assets/
+      autosource/   # generated
+      build/        # generated
+      mkdocs.yml    # generated
+      .wysee-venv/  # generated
+
+Usage:
+    python wysee_mkdocsify.py path/to/master.md
+    python wysee_mkdocsify.py path/to/master.md --serve
+
+Supported source conventions:
+- Optional YAML front matter at the top of master.md for site-level MkDocs config.
+- Page delimiter line (exact, column 0 by default):
+      <!-- wysee:page-break -->
+- Each generated page must start with an ATX H1 (`# Title`) after any optional
+  page-level YAML front matter and/or wysee directives.
+- Optional page-level directives before the first H1:
+      <!-- wysee:slug stable-url -->
+      <!-- wysee:nav-title Custom Nav Label -->
+
+Notes:
+- The first generated page is always autosource/index.md.
+- Non-markdown assets are copied from ./assets to ./autosource/assets.
+- Light and dark editor-theme JSON files are compiled into one CSS file that
+  Material for MkDocs loads via `extra_css`.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import unicodedata
+import venv
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable, Mapping
+
+BOOTSTRAP_ENV = "WYSEE_BOOTSTRAPPED"
+DEFAULT_DELIMITER = "<!-- wysee:page-break -->"
+DEFAULT_LIGHT_THEME = "theme.light.json"
+DEFAULT_DARK_THEME = "theme.dark.json"
+DEFAULT_ASSETS_DIR = "assets"
+DEFAULT_AUTOSOURCE_DIR = "autosource"
+DEFAULT_BUILD_DIR = "build"
+DEFAULT_VENV_DIR = ".wysee-venv"
+
+
+class WyseeError(RuntimeError):
+    """Raised for user-facing validation/build errors."""
+
+
+@dataclass
+class PageSpec:
+    order: int
+    title: str
+    nav_title: str
+    slug: str
+    filename: str
+    body: str
+    page_meta: dict[str, Any]
+    anchors: set[str]
+
+
+def eprint(*parts: object) -> None:
+    print(*parts, file=sys.stderr)
+
+
+def venv_python_path(venv_dir: Path) -> Path:
+    if os.name == "nt":
+        return venv_dir / "Scripts" / "python.exe"
+    return venv_dir / "bin" / "python"
+
+
+def run_checked(cmd: list[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
+    eprint(">", " ".join(cmd))
+    subprocess.run(cmd, cwd=str(cwd) if cwd else None, env=env, check=True)
+
+
+def maybe_bootstrap(args: argparse.Namespace, project_root: Path) -> None:
+    """
+    Ensure mkdocs-material is installed in a local virtual environment, then
+    re-exec this script inside that environment. This keeps the script a one-step
+    entrypoint without polluting the user's global Python installation.
+    """
+    if args.no_install or os.environ.get(BOOTSTRAP_ENV) == "1":
+        return
+
+    venv_dir = (project_root / args.venv_dir).resolve()
+    vpy = venv_python_path(venv_dir)
+
+    if not vpy.exists():
+        eprint(f"Creating virtual environment at {venv_dir}")
+        venv.create(venv_dir, with_pip=True)
+
+    install_needed = args.upgrade
+    if not install_needed:
+        probe = subprocess.run(
+            [str(vpy), "-c", "import mkdocs, yaml; import pymdownx.superfences"],
+            capture_output=True,
+            text=True,
+        )
+        install_needed = probe.returncode != 0
+
+    if install_needed:
+        eprint("Installing/upgrading MkDocs + Material for MkDocs into the local virtualenv...")
+        run_checked([str(vpy), "-m", "pip", "install", "--upgrade", "pip"], cwd=project_root)
+        run_checked(
+            [str(vpy), "-m", "pip", "install", "--upgrade", "mkdocs-material==9.*"],
+            cwd=project_root,
+        )
+
+    env = os.environ.copy()
+    env[BOOTSTRAP_ENV] = "1"
+    os.execve(str(vpy), [str(vpy), str(Path(__file__).resolve()), *sys.argv[1:]], env)
+
+
+def import_runtime_dependencies() -> tuple[Any, Any]:
+    """
+    Import dependencies that are expected to exist after bootstrap.
+    """
+    import yaml  # type: ignore
+    import pymdownx.superfences  # type: ignore
+
+    return yaml, pymdownx.superfences
+
+
+def parse_yaml_front_matter(text: str, yaml_mod: Any) -> tuple[dict[str, Any], str]:
+    if text.startswith("\ufeff"):
+        text = text.lstrip("\ufeff")
+
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() in {"---", "..."}:
+            payload = "".join(lines[1:idx])
+            data = yaml_mod.safe_load(payload) if payload.strip() else {}
+            if data is None:
+                data = {}
+            if not isinstance(data, dict):
+                raise WyseeError("Top-level YAML front matter must be a mapping/object.")
+            rest = "".join(lines[idx + 1 :])
+            return data, rest
+
+    raise WyseeError("Unterminated YAML front matter block.")
+
+
+def line_is_delimiter(line: str, delimiter: str) -> bool:
+    return line.rstrip("\r\n") == delimiter
+
+
+def split_pages(master_body: str, delimiter: str) -> list[str]:
+    """
+    Split on exact delimiter lines that occur outside fenced code blocks.
+    """
+    lines = master_body.splitlines(keepends=True)
+    segments: list[str] = []
+    current: list[str] = []
+    found_any_delimiter = False
+
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+
+    opening_fence_re = re.compile(r"^[ ]{0,3}([`~]{3,})(.*)$")
+    closing_fence_re = re.compile(r"^[ ]{0,3}([`~]{3,})[ \t]*$")
+
+    for line in lines:
+        if not in_fence and line_is_delimiter(line, delimiter):
+            found_any_delimiter = True
+            segments.append("".join(current))
+            current = []
+            continue
+
+        current.append(line)
+
+        raw = line.rstrip("\r\n")
+        if in_fence:
+            match = closing_fence_re.match(raw)
+            if match and match.group(1)[0] == fence_char and len(match.group(1)) >= fence_len:
+                in_fence = False
+                fence_char = ""
+                fence_len = 0
+        else:
+            match = opening_fence_re.match(raw)
+            if match:
+                fence_char = match.group(1)[0]
+                fence_len = len(match.group(1))
+                in_fence = True
+
+    segments.append("".join(current))
+
+    if not found_any_delimiter:
+        return [master_body]
+
+    prelude = segments[0]
+    if has_nontrivial_prelude(prelude):
+        raise WyseeError(
+            "Found non-empty content before the first page-break delimiter. "
+            "Put only site-level YAML front matter (at the very top), blank lines, "
+            "or comments before the first page."
+        )
+
+    pages = segments[1:]
+    if not pages:
+        raise WyseeError("At least one page must follow the first page-break delimiter.")
+
+    return pages
+
+
+def has_nontrivial_prelude(text: str) -> bool:
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("<!--") and stripped.endswith("-->"):
+            continue
+        return True
+    return False
+
+
+def slugify(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text)
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    ascii_text = ascii_text.lower()
+    ascii_text = re.sub(r"[^a-z0-9]+", "-", ascii_text)
+    ascii_text = re.sub(r"-{2,}", "-", ascii_text).strip("-")
+    return ascii_text or "page"
+
+
+def parse_h1(line: str) -> str | None:
+    match = re.match(r"^#\s+(.+?)\s*#*\s*$", line)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def clean_heading_text(text: str) -> str:
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"[*_~]+", "", text)
+    return text.strip()
+
+
+def extract_heading_anchors(markdown: str) -> set[str]:
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+    opening_fence_re = re.compile(r"^[ ]{0,3}([`~]{3,})(.*)$")
+    closing_fence_re = re.compile(r"^[ ]{0,3}([`~]{3,})[ \t]*$")
+    heading_re = re.compile(r"^[ ]{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
+
+    for line in markdown.splitlines():
+        raw = line.rstrip("\r\n")
+        if in_fence:
+            match = closing_fence_re.match(raw)
+            if match and match.group(1)[0] == fence_char and len(match.group(1)) >= fence_len:
+                in_fence = False
+                fence_char = ""
+                fence_len = 0
+            continue
+
+        match = opening_fence_re.match(raw)
+        if match:
+            fence_char = match.group(1)[0]
+            fence_len = len(match.group(1))
+            in_fence = True
+            continue
+
+        heading_match = heading_re.match(raw)
+        if not heading_match:
+            continue
+
+        text = clean_heading_text(heading_match.group(2))
+        base = slugify(text)
+        count = seen.get(base, 0)
+        seen[base] = count + 1
+        anchor = base if count == 0 else f"{base}_{count}"
+        anchors.add(anchor)
+
+    return anchors
+
+
+def rewrite_cross_page_fragment_links(
+    markdown: str,
+    current_page: PageSpec,
+    anchor_to_pages: dict[str, set[str]],
+) -> str:
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+    opening_fence_re = re.compile(r"^[ ]{0,3}([`~]{3,})(.*)$")
+    closing_fence_re = re.compile(r"^[ ]{0,3}([`~]{3,})[ \t]*$")
+    link_re = re.compile(r"\]\(#([^)]+)\)")
+
+    def repl(match: re.Match[str]) -> str:
+        fragment = match.group(1).strip()
+        if not fragment or fragment in current_page.anchors:
+            return match.group(0)
+        destinations = anchor_to_pages.get(fragment, set())
+        if len(destinations) != 1:
+            return match.group(0)
+        destination = next(iter(destinations))
+        return f"]({destination}#{fragment})"
+
+    lines = markdown.splitlines(keepends=True)
+    out: list[str] = []
+    for line in lines:
+        raw = line.rstrip("\r\n")
+        if in_fence:
+            out.append(line)
+            match = closing_fence_re.match(raw)
+            if match and match.group(1)[0] == fence_char and len(match.group(1)) >= fence_len:
+                in_fence = False
+                fence_char = ""
+                fence_len = 0
+            continue
+
+        match = opening_fence_re.match(raw)
+        if match:
+            fence_char = match.group(1)[0]
+            fence_len = len(match.group(1))
+            in_fence = True
+            out.append(line)
+            continue
+
+        out.append(link_re.sub(repl, line))
+
+    return "".join(out)
+
+
+def parse_page_chunk(
+    chunk: str,
+    order: int,
+    is_index_page: bool,
+    yaml_mod: Any,
+) -> PageSpec:
+    working = chunk.lstrip("\r\n")
+
+    page_meta, working = parse_yaml_front_matter(working, yaml_mod)
+
+    directive_slug: str | None = None
+    directive_nav_title: str | None = None
+    body_lines = working.splitlines(keepends=True)
+
+    idx = 0
+    directive_slug_re = re.compile(r"^<!--\s*wysee:slug\s+(.+?)\s*-->\s*$")
+    directive_nav_re = re.compile(r"^<!--\s*wysee:nav-title\s+(.+?)\s*-->\s*$")
+
+    while idx < len(body_lines):
+        stripped = body_lines[idx].strip()
+        if not stripped:
+            idx += 1
+            continue
+
+        slug_match = directive_slug_re.match(body_lines[idx])
+        if slug_match:
+            directive_slug = slug_match.group(1).strip()
+            idx += 1
+            continue
+
+        nav_match = directive_nav_re.match(body_lines[idx])
+        if nav_match:
+            directive_nav_title = nav_match.group(1).strip()
+            idx += 1
+            continue
+
+        break
+
+    body = "".join(body_lines[idx:]).lstrip("\r\n")
+    if not body.strip():
+        raise WyseeError(f"Generated page #{order + 1} is empty.")
+
+    first_nonblank_line = None
+    for raw_line in body.splitlines():
+        if raw_line.strip():
+            first_nonblank_line = raw_line
+            break
+
+    if first_nonblank_line is None:
+        raise WyseeError(f"Generated page #{order + 1} is empty.")
+
+    title_from_h1 = parse_h1(first_nonblank_line)
+    if title_from_h1 is None:
+        raise WyseeError(
+            f"Generated page #{order + 1} must start with an H1 (`# Title`) "
+            "after any optional page front matter and wysee directives."
+        )
+
+    working_page_meta = dict(page_meta)
+    page_slug = str(working_page_meta.pop("slug", "")).strip() or (directive_slug or "")
+    nav_title = (
+        str(working_page_meta.pop("nav_title", "")).strip()
+        or (directive_nav_title or "")
+        or str(working_page_meta.get("title", "")).strip()
+        or title_from_h1
+    )
+
+    if is_index_page:
+        filename = "index.md"
+        slug = "index"
+    else:
+        slug = page_slug or slugify(title_from_h1)
+        filename = f"{slug}.md"
+
+    emitted_meta = dict(working_page_meta)
+    emitted_meta.setdefault("title", nav_title)
+
+    page_body = body.rstrip() + "\n"
+
+    return PageSpec(
+        order=order,
+        title=title_from_h1,
+        nav_title=nav_title,
+        slug=slug,
+        filename=filename,
+        body=page_body,
+        page_meta=emitted_meta,
+        anchors=extract_heading_anchors(page_body),
+    )
+
+
+def ensure_unique_filenames(pages: list[PageSpec]) -> None:
+    seen: dict[str, PageSpec] = {}
+    for page in pages:
+        if page.filename in seen:
+            other = seen[page.filename]
+            raise WyseeError(
+                f"Duplicate generated filename '{page.filename}' from pages "
+                f"'{other.nav_title}' and '{page.nav_title}'. Use <!-- wysee:slug ... --> "
+                "or page front matter `slug:` to make them unique."
+            )
+        seen[page.filename] = page
+
+
+def detect_theme_path(project_root: Path, explicit: str | None, candidates: list[str], label: str) -> Path:
+    if explicit:
+        path = (project_root / explicit).resolve()
+        if not path.exists():
+            raise WyseeError(f"{label} theme JSON not found: {path}")
+        return path
+
+    for candidate in candidates:
+        path = (project_root / candidate).resolve()
+        if path.exists():
+            return path
+
+    raise WyseeError(
+        f"Could not find a {label} theme JSON. Expected one of: "
+        + ", ".join(str(project_root / c) for c in candidates)
+    )
+
+
+def load_theme_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise WyseeError(f"Invalid JSON in theme file {path}: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise WyseeError(f"Theme file {path} must contain a JSON object.")
+
+    element_styles = data.get("elementStyles", {})
+    if element_styles is None:
+        element_styles = {}
+    if not isinstance(element_styles, dict):
+        raise WyseeError(f"`elementStyles` in {path} must be a JSON object.")
+
+    return data
+
+
+def parse_css_declarations(style_text: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for part in style_text.split(";"):
+        if ":" not in part:
+            continue
+        key, value = part.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value:
+            pairs.append((key, value))
+    return pairs
+
+
+def emit_css_block(selector: str, declarations: list[tuple[str, str]]) -> str:
+    if not declarations:
+        return ""
+    body = "\n".join(f"  {prop}: {value};" for prop, value in declarations)
+    return f"{selector} {{\n{body}\n}}\n"
+
+
+def compile_theme_css(light_theme: dict[str, Any], dark_theme: dict[str, Any]) -> str:
+    selector_map = {
+        "h1": ".md-typeset h1",
+        "h2": ".md-typeset h2",
+        "h3": ".md-typeset h3",
+        "h4": ".md-typeset h4",
+        "h5": ".md-typeset h5",
+        "h6": ".md-typeset h6",
+        "p": ".md-typeset p",
+        "a": ".md-typeset a",
+        "blockquote": ".md-typeset blockquote",
+        "hr": ".md-typeset hr",
+        "ul": ".md-typeset ul",
+        "ol": ".md-typeset ol",
+        "li": ".md-typeset li",
+        "table": ".md-typeset table",
+        "thead": ".md-typeset thead",
+        "th": ".md-typeset th",
+        "td": ".md-typeset td",
+        "pre": ".md-typeset pre",
+        "codeBlock": ".md-typeset pre code",
+    }
+
+    def compile_one(theme: dict[str, Any], scheme: str) -> str:
+        pieces: list[str] = []
+        scope = f'[data-md-color-scheme="{scheme}"]'
+        base_styles = str(theme.get("baseStyles", "") or "")
+        base_pairs = parse_css_declarations(base_styles)
+
+        content_pairs: list[tuple[str, str]] = []
+        typeset_pairs: list[tuple[str, str]] = []
+        for prop, value in base_pairs:
+            if prop in {"background", "background-color"}:
+                content_pairs.append((prop, value))
+                # Also keep it on the typeset block so long pages keep the same feel.
+                typeset_pairs.append((prop, value))
+            else:
+                typeset_pairs.append((prop, value))
+
+        if content_pairs:
+            pieces.append(emit_css_block(f"{scope} .md-content__inner", content_pairs))
+        if typeset_pairs:
+            pieces.append(emit_css_block(f"{scope} .md-typeset", typeset_pairs))
+
+        element_styles = theme.get("elementStyles", {}) or {}
+
+        inline_code_styles = str(element_styles.get("codeInline", "") or "")
+        if inline_code_styles:
+            inline_pairs = parse_css_declarations(inline_code_styles)
+            pieces.append(emit_css_block(f"{scope} .md-typeset code", inline_pairs))
+
+        for key, selector in selector_map.items():
+            style_text = str(element_styles.get(key, "") or "")
+            if not style_text:
+                continue
+            decls = parse_css_declarations(style_text)
+
+            if key == "codeBlock":
+                decls = [
+                    ("background", "transparent"),
+                    ("border", "0"),
+                    ("padding", "0"),
+                    ("border-radius", "0"),
+                ] + decls
+
+            pieces.append(emit_css_block(f"{scope} {selector}", decls))
+
+        odd_style = str(element_styles.get("tableOddRow", "") or "")
+        even_style = str(element_styles.get("tableEvenRow", "") or "")
+        if odd_style:
+            pieces.append(
+                emit_css_block(
+                    f"{scope} .md-typeset tbody tr:nth-child(odd)",
+                    parse_css_declarations(odd_style),
+                )
+            )
+        if even_style:
+            pieces.append(
+                emit_css_block(
+                    f"{scope} .md-typeset tbody tr:nth-child(even)",
+                    parse_css_declarations(even_style),
+                )
+            )
+
+        return "".join(piece for piece in pieces if piece)
+
+    header = "/* Generated by wysee_mkdocsify.py — do not edit by hand. */\n\n"
+    return header + compile_one(light_theme, "default") + "\n" + compile_one(dark_theme, "slate")
+
+
+def merge_dicts(base: dict[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
+    result = dict(base)
+    for key, value in override.items():
+        if (
+            key in result
+            and isinstance(result[key], dict)
+            and isinstance(value, Mapping)
+        ):
+            result[key] = merge_dicts(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def normalize_plugin_list(items: Any) -> list[Any]:
+    if items is None:
+        return []
+    if not isinstance(items, list):
+        raise WyseeError("Top-level `plugins` in site front matter must be a YAML list.")
+    return items
+
+
+def normalize_ext_list(items: Any) -> list[Any]:
+    if items is None:
+        return []
+    if not isinstance(items, list):
+        raise WyseeError("Top-level `markdown_extensions` in site front matter must be a YAML list.")
+    return items
+
+
+def build_mkdocs_config(
+    project_root: Path,
+    pages: list[PageSpec],
+    site_meta: dict[str, Any],
+    args: argparse.Namespace,
+    yaml_mod: Any,
+    superfences_mod: Any,
+) -> dict[str, Any]:
+    meta = dict(site_meta)
+
+    compiler_features = meta.pop("features", {}) or {}
+    if not isinstance(compiler_features, Mapping):
+        raise WyseeError("Top-level `features` in site front matter must be a mapping/object.")
+
+    user_theme = meta.pop("theme", {})
+    user_plugins = meta.pop("plugins", [])
+    user_search = meta.pop("search", {})
+    user_extra_css = meta.pop("extra_css", [])
+    user_extra_js = meta.pop("extra_javascript", [])
+    user_markdown_extensions = meta.pop("markdown_extensions", [])
+    user_extra = meta.pop("extra", {})
+
+    if user_theme is None:
+        user_theme = {}
+    if not isinstance(user_theme, Mapping):
+        raise WyseeError("Top-level `theme` in site front matter must be a mapping/object.")
+    if user_search is None:
+        user_search = {}
+    if not isinstance(user_search, Mapping):
+        raise WyseeError("Top-level `search` in site front matter must be a mapping/object.")
+    if user_extra is None:
+        user_extra = {}
+    if not isinstance(user_extra, Mapping):
+        raise WyseeError("Top-level `extra` in site front matter must be a mapping/object.")
+
+    if user_extra_css and not isinstance(user_extra_css, list):
+        raise WyseeError("Top-level `extra_css` in site front matter must be a YAML list.")
+    if user_extra_js and not isinstance(user_extra_js, list):
+        raise WyseeError("Top-level `extra_javascript` in site front matter must be a YAML list.")
+
+    user_plugins_list = normalize_plugin_list(user_plugins)
+    user_markdown_extensions_list = normalize_ext_list(user_markdown_extensions)
+
+    # Known Wysee-specific keys should not be passed through as raw MkDocs top-level config.
+    wysee_extra: dict[str, Any] = {}
+    for key in ["product_name", "company_name", "links", "assets_dir"]:
+        if key in meta:
+            wysee_extra[key] = meta.pop(key)
+
+    def feature_enabled(name: str, default: bool = True) -> bool:
+        value = compiler_features.get(name, default)
+        if isinstance(value, str):
+            return value.strip().lower() not in {"", "0", "false", "no", "off", "none"}
+        return bool(value)
+
+    search_enabled = feature_enabled("search", True)
+    mermaid_enabled = feature_enabled("mermaid", True)
+
+    math_value = compiler_features.get("math", "katex")
+    if isinstance(math_value, str) and math_value.strip().lower() in {"", "0", "false", "no", "off", "none"}:
+        math_enabled = False
+        math_mode = ""
+    else:
+        math_enabled = bool(math_value)
+        math_mode = str(math_value).strip().lower() if math_value is not None else "katex"
+    if math_enabled and math_mode not in {"katex"}:
+        raise WyseeError("Only `features.math: katex` is currently supported by wysee_mkdocsify.py.")
+
+    default_theme = {
+        "name": "material",
+        "font": False,
+        "palette": [
+            {
+                "media": "(prefers-color-scheme: light)",
+                "scheme": "default",
+                "toggle": {
+                    "icon": "material/brightness-7",
+                    "name": "Switch to dark mode",
+                },
+            },
+            {
+                "media": "(prefers-color-scheme: dark)",
+                "scheme": "slate",
+                "toggle": {
+                    "icon": "material/brightness-4",
+                    "name": "Switch to light mode",
+                },
+            },
+        ],
+        "features": [
+            "content.code.copy",
+        ],
+    }
+
+    merged_theme = merge_dicts(default_theme, dict(user_theme))
+    merged_theme["name"] = "material"
+    merged_theme["font"] = False
+
+    theme_features = merged_theme.get("features", [])
+    if theme_features is None:
+        theme_features = []
+    if not isinstance(theme_features, list):
+        raise WyseeError("`theme.features` in site front matter must be a YAML list.")
+    merged_theme["features"] = list(dict.fromkeys([*default_theme["features"], *theme_features]))
+
+    site_name = meta.pop("site_name", None) or project_root.name.replace("-", " ").replace("_", " ").title()
+
+    def plugin_name(item: Any) -> str | None:
+        if isinstance(item, str):
+            return item
+        if isinstance(item, Mapping) and item:
+            return str(next(iter(item.keys())))
+        return None
+
+    existing_plugin_names = {name for name in (plugin_name(item) for item in user_plugins_list) if name}
+
+    plugins: list[Any] = []
+    if search_enabled and "search" not in existing_plugin_names:
+        plugins.append({"search": dict(user_search)} if user_search else "search")
+    if "privacy" not in existing_plugin_names:
+        plugins.append("privacy")
+    plugins.extend(user_plugins_list)
+
+    superfences_cfg: dict[str, Any] = {}
+    if mermaid_enabled:
+        superfences_cfg["custom_fences"] = [
+            {
+                "name": "mermaid",
+                "class": "mermaid",
+                "format": superfences_mod.fence_code_format,
+            }
+        ]
+
+    markdown_extensions: list[Any] = [
+        "tables",
+        "attr_list",
+        "md_in_html",
+        {"toc": {"permalink": True}},
+        {
+            "pymdownx.highlight": {
+                "anchor_linenums": True,
+                "line_spans": "__span",
+                "pygments_lang_class": True,
+            }
+        },
+        "pymdownx.inlinehilite",
+        "pymdownx.snippets",
+        {"pymdownx.superfences": superfences_cfg},
+    ]
+    if math_enabled:
+        markdown_extensions.append({"pymdownx.arithmatex": {"generic": True}})
+    markdown_extensions.extend(user_markdown_extensions_list)
+
+    extra_css = ["stylesheets/wysee.css"]
+    if math_enabled:
+        extra_css.append("https://unpkg.com/katex@0/dist/katex.min.css")
+    extra_css.extend(user_extra_css)
+    extra_css = list(dict.fromkeys(extra_css))
+
+    extra_javascript: list[Any] = []
+    if math_enabled:
+        extra_javascript.extend(
+            [
+                "javascripts/katex.js",
+                "https://unpkg.com/katex@0/dist/katex.min.js",
+                "https://unpkg.com/katex@0/dist/contrib/auto-render.min.js",
+            ]
+        )
+    extra_javascript.extend(user_extra_js)
+    # De-duplicate only plain-string entries to avoid altering mapping-based script configs.
+    seen_js: set[str] = set()
+    deduped_js: list[Any] = []
+    for item in extra_javascript:
+        if isinstance(item, str):
+            if item in seen_js:
+                continue
+            seen_js.add(item)
+        deduped_js.append(item)
+    extra_javascript = deduped_js
+
+    watch_paths = [
+        os.path.relpath(args.master_md, project_root),
+        os.path.relpath(args.light_theme_path, project_root),
+    ]
+    if args.dark_theme_path:
+        watch_paths.append(os.path.relpath(args.dark_theme_path, project_root))
+    if args.assets_dir.exists():
+        watch_paths.append(os.path.relpath(args.assets_dir, project_root))
+
+    extra_config = merge_dicts(dict(user_extra), wysee_extra) if wysee_extra else dict(user_extra)
+
+    config: dict[str, Any] = {}
+    # Pass through remaining MkDocs-compatible top-level keys from the master front matter.
+    config.update(meta)
+    if extra_config:
+        config["extra"] = extra_config
+    config["site_name"] = site_name
+    config["docs_dir"] = args.autosource_dir.name
+    config["site_dir"] = args.build_dir.name
+    config["theme"] = merged_theme
+    config["plugins"] = plugins
+    config["markdown_extensions"] = markdown_extensions
+    config["extra_css"] = extra_css
+    config["extra_javascript"] = extra_javascript
+    config["watch"] = watch_paths
+    config["nav"] = [{page.nav_title: page.filename} for page in pages]
+
+    if "strict" not in config:
+        config["strict"] = False
+
+    return config
+
+
+def emit_page_markdown(page: PageSpec, yaml_mod: Any) -> str:
+    front_matter = ""
+    if page.page_meta:
+        fm = yaml_mod.safe_dump(page.page_meta, sort_keys=False, allow_unicode=True).strip()
+        front_matter = f"---\n{fm}\n---\n\n"
+    return front_matter + page.body
+
+
+def write_katex_js(js_path: Path) -> None:
+    js_path.parent.mkdir(parents=True, exist_ok=True)
+    js_path.write_text(
+        """document$.subscribe(({ body }) => {
+  renderMathInElement(body, {
+    delimiters: [
+      { left: "$$",  right: "$$",  display: true },
+      { left: "$",   right: "$",   display: false },
+      { left: "\\\\(", right: "\\\\)", display: false },
+      { left: "\\\\[", right: "\\\\]", display: true }
+    ]
+  })
+})
+""",
+        encoding="utf-8",
+    )
+
+
+def validate_generated_asset_refs(config: Mapping[str, Any], autosource_dir: Path) -> None:
+    missing: list[str] = []
+
+    def is_local_path(value: str) -> bool:
+        return "://" not in value and not value.startswith(("mailto:", "tel:"))
+
+    theme = config.get("theme", {})
+    if isinstance(theme, Mapping):
+        for key in ("logo", "favicon"):
+            value = theme.get(key)
+            if isinstance(value, str) and value.strip() and is_local_path(value):
+                if not (autosource_dir / value).exists():
+                    missing.append(f"theme.{key}: {value}")
+
+    for key in ("extra_css", "extra_javascript"):
+        entries = config.get(key, [])
+        if not isinstance(entries, list):
+            continue
+        for item in entries:
+            if isinstance(item, str):
+                value = item
+            elif isinstance(item, Mapping):
+                value = str(item.get("path", "")).strip()
+            else:
+                continue
+            if value and is_local_path(value) and not (autosource_dir / value).exists():
+                missing.append(f"{key}: {value}")
+
+    if missing:
+        eprint("Warning: Some configured local theme/assets files were not found in autosource:")
+        for item in missing:
+            eprint("  -", item)
+
+
+def render_project(args: argparse.Namespace, yaml_mod: Any, superfences_mod: Any) -> tuple[Path, Path]:
+    project_root = Path(args.master_md).resolve().parent
+    master_path = Path(args.master_md).resolve()
+
+    raw_master = master_path.read_text(encoding="utf-8")
+    site_meta, remainder = parse_yaml_front_matter(raw_master, yaml_mod)
+    page_chunks = split_pages(remainder, args.delimiter)
+
+    pages = [
+        parse_page_chunk(chunk, order=i, is_index_page=(i == 0), yaml_mod=yaml_mod)
+        for i, chunk in enumerate(page_chunks)
+    ]
+    ensure_unique_filenames(pages)
+
+    anchor_to_pages: dict[str, set[str]] = {}
+    for page in pages:
+        for anchor in page.anchors:
+            anchor_to_pages.setdefault(anchor, set()).add(page.filename)
+
+    for page in pages:
+        page.body = rewrite_cross_page_fragment_links(page.body, page, anchor_to_pages)
+
+    autosource_dir = project_root / args.autosource_dir
+    build_dir = project_root / args.build_dir
+    mkdocs_path = project_root / "mkdocs.yml"
+
+    if autosource_dir.exists():
+        shutil.rmtree(autosource_dir)
+    autosource_dir.mkdir(parents=True, exist_ok=True)
+
+    # Emit pages.
+    for page in pages:
+        out_path = autosource_dir / page.filename
+        out_path.write_text(emit_page_markdown(page, yaml_mod), encoding="utf-8")
+
+    # Copy assets.
+    if args.assets_dir.exists():
+        shutil.copytree(args.assets_dir, autosource_dir / "assets", dirs_exist_ok=True)
+
+    # Compile CSS.
+    light_theme = load_theme_json(args.light_theme_path)
+    dark_theme = load_theme_json(args.dark_theme_path) if args.dark_theme_path else light_theme
+    css_text = compile_theme_css(light_theme, dark_theme)
+    css_dir = autosource_dir / "stylesheets"
+    css_dir.mkdir(parents=True, exist_ok=True)
+    (css_dir / "wysee.css").write_text(css_text, encoding="utf-8")
+    # Back-compat alias for earlier script versions.
+    (css_dir / "wysee-theme.css").write_text(css_text, encoding="utf-8")
+
+    # KaTeX runtime.
+    write_katex_js(autosource_dir / "javascripts" / "katex.js")
+
+    config = build_mkdocs_config(project_root, pages, site_meta, args, yaml_mod, superfences_mod)
+    validate_generated_asset_refs(config, autosource_dir)
+
+    if mkdocs_path.exists():
+        existing = mkdocs_path.read_text(encoding="utf-8", errors="ignore")
+        if "Generated by wysee_mkdocsify.py" not in existing:
+            backup = project_root / "mkdocs.yml.bak"
+            shutil.copy2(mkdocs_path, backup)
+            eprint(f"Backed up existing mkdocs.yml to {backup}")
+
+    mkdocs_yaml = yaml_mod.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False)
+    mkdocs_path.write_text(
+        "# Generated by wysee_mkdocsify.py — do not edit by hand.\n\n" + mkdocs_yaml,
+        encoding="utf-8",
+    )
+
+    return mkdocs_path, build_dir
+
+
+def build_site(project_root: Path, mkdocs_path: Path) -> None:
+    run_checked(
+        [sys.executable, "-m", "mkdocs", "build", "--clean", "-f", str(mkdocs_path)],
+        cwd=project_root,
+    )
+
+
+def serve_site(
+    project_root: Path,
+    mkdocs_path: Path,
+    watched_paths: list[Path],
+    args: argparse.Namespace,
+    yaml_mod: Any,
+    superfences_mod: Any,
+) -> None:
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "mkdocs", "serve", "-f", str(mkdocs_path)],
+        cwd=str(project_root),
+    )
+
+    try:
+        previous = snapshot_paths(watched_paths)
+        while proc.poll() is None:
+            time.sleep(0.75)
+            current = snapshot_paths(watched_paths)
+            if current != previous:
+                eprint("Source change detected, regenerating autosource...")
+                try:
+                    mkdocs_path, _ = render_project(args, yaml_mod, superfences_mod)
+                    previous = current
+                except Exception as exc:  # pragma: no cover - best-effort live loop
+                    eprint(f"Regeneration failed: {exc}")
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            proc.wait(timeout=10)
+
+
+def snapshot_paths(paths: Iterable[Path]) -> dict[str, int | None]:
+    snapshot: dict[str, int | None] = {}
+    for path in paths:
+        if path.is_file():
+            snapshot[str(path)] = path.stat().st_mtime_ns
+            continue
+        if path.is_dir():
+            for child in sorted(p for p in path.rglob("*") if p.is_file()):
+                snapshot[str(child)] = child.stat().st_mtime_ns
+            continue
+        snapshot[str(path)] = None
+    return snapshot
+
+
+def clean_outputs(project_root: Path, autosource_dir: Path, build_dir: Path, mkdocs_path: Path) -> None:
+    for path in [autosource_dir, build_dir]:
+        if path.exists():
+            shutil.rmtree(path)
+            eprint(f"Removed {path}")
+    if mkdocs_path.exists():
+        text = mkdocs_path.read_text(encoding="utf-8", errors="ignore")
+        if "Generated by wysee_mkdocsify.py" in text:
+            mkdocs_path.unlink()
+            eprint(f"Removed {mkdocs_path}")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Compile one master Markdown file into a Material for MkDocs docs site."
+    )
+    parser.add_argument("master_md", help="Path to the master Markdown file.")
+    parser.add_argument(
+        "--delimiter",
+        default=DEFAULT_DELIMITER,
+        help=f"Exact page-break delimiter line. Default: {DEFAULT_DELIMITER!r}",
+    )
+    parser.add_argument(
+        "--light-theme",
+        dest="light_theme",
+        default=None,
+        help=f"Path (relative to the master file directory) to the light theme JSON. "
+             f"Default auto-detect: {DEFAULT_LIGHT_THEME}",
+    )
+    parser.add_argument(
+        "--dark-theme",
+        dest="dark_theme",
+        default=None,
+        help=f"Path (relative to the master file directory) to the dark theme JSON. "
+             f"Default auto-detect: {DEFAULT_DARK_THEME}",
+    )
+    parser.add_argument(
+        "--assets-dir",
+        default=DEFAULT_ASSETS_DIR,
+        help=f"Assets directory relative to the master file directory. Default: {DEFAULT_ASSETS_DIR}",
+    )
+    parser.add_argument(
+        "--autosource-dir",
+        default=DEFAULT_AUTOSOURCE_DIR,
+        help=f"Generated docs source directory relative to the master file directory. Default: {DEFAULT_AUTOSOURCE_DIR}",
+    )
+    parser.add_argument(
+        "--build-dir",
+        default=DEFAULT_BUILD_DIR,
+        help=f"Built site directory relative to the master file directory. Default: {DEFAULT_BUILD_DIR}",
+    )
+    parser.add_argument(
+        "--venv-dir",
+        default=DEFAULT_VENV_DIR,
+        help=f"Local virtualenv directory relative to the master file directory. Default: {DEFAULT_VENV_DIR}",
+    )
+    parser.add_argument("--serve", action="store_true", help="Run mkdocs serve after generating the site.")
+    parser.add_argument("--clean", action="store_true", help="Delete generated autosource/build files and exit.")
+    parser.add_argument("--upgrade", action="store_true", help="Force upgrade of mkdocs-material in the local venv.")
+    parser.add_argument(
+        "--no-install",
+        action="store_true",
+        help="Skip automatic virtualenv/bootstrap install step.",
+    )
+    parser.add_argument(
+        "--no-build",
+        action="store_true",
+        help="Generate autosource, CSS, and mkdocs.yml, but do not run `mkdocs build`.",
+    )
+    return parser.parse_args()
+
+
+def resolve_paths(args: argparse.Namespace) -> None:
+    master_path = Path(args.master_md).resolve()
+    if not master_path.exists():
+        raise WyseeError(f"Master Markdown file not found: {master_path}")
+    args.master_md = str(master_path)
+
+    project_root = master_path.parent
+    args.assets_dir = (project_root / args.assets_dir).resolve()
+    args.autosource_dir = (project_root / args.autosource_dir).resolve()
+    args.build_dir = (project_root / args.build_dir).resolve()
+
+    light_candidates = [
+        DEFAULT_LIGHT_THEME,
+        "theme.json",
+        f"{master_path.stem}.light.json",
+    ]
+    dark_candidates = [
+        DEFAULT_DARK_THEME,
+        f"{master_path.stem}.dark.json",
+    ]
+    args.light_theme_path = detect_theme_path(project_root, args.light_theme, light_candidates, "light")
+    # Dark theme is optional — if not found, we fall back to the light theme.
+    try:
+        args.dark_theme_path = detect_theme_path(project_root, args.dark_theme, dark_candidates, "dark")
+    except WyseeError:
+        args.dark_theme_path = None
+
+
+def main() -> int:
+    args = parse_args()
+    resolve_paths(args)
+
+    project_root = Path(args.master_md).resolve().parent
+    maybe_bootstrap(args, project_root)
+
+    yaml_mod, superfences_mod = import_runtime_dependencies()
+
+    mkdocs_path = project_root / "mkdocs.yml"
+    autosource_dir = Path(args.autosource_dir)
+    build_dir = Path(args.build_dir)
+
+    if args.clean:
+        clean_outputs(project_root, autosource_dir, build_dir, mkdocs_path)
+        return 0
+
+    mkdocs_path, _ = render_project(args, yaml_mod, superfences_mod)
+
+    eprint(f"Generated autosource at {autosource_dir}")
+    eprint(f"Generated mkdocs config at {mkdocs_path}")
+
+    if not args.no_build and not args.serve:
+        build_site(project_root, mkdocs_path)
+        eprint(f"Built static site at {build_dir}")
+
+    if args.serve:
+        watched_paths = [Path(args.master_md), Path(args.light_theme_path)]
+        if args.dark_theme_path:
+            watched_paths.append(Path(args.dark_theme_path))
+        if args.assets_dir.exists():
+            watched_paths.append(Path(args.assets_dir))
+        serve_site(project_root, mkdocs_path, watched_paths, args, yaml_mod, superfences_mod)
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except WyseeError as exc:
+        eprint(f"Error: {exc}")
+        raise SystemExit(2)
+    except subprocess.CalledProcessError as exc:
+        eprint(f"Command failed with exit code {exc.returncode}: {' '.join(exc.cmd)}")
+        raise SystemExit(exc.returncode)

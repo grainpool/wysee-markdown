@@ -1,0 +1,194 @@
+:root {
+  --wysee-ui-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --wysee-code-font: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+}
+
+/* LIGHT */
+[data-md-color-scheme="default"] {
+  --md-default-bg-color: #f4f6ff;
+  --md-default-fg-color: #1c2230;
+  --md-default-fg-color--light: #4c5670;
+  --md-default-fg-color--lighter: #707b96;
+  --md-default-fg-color--lightest: #c4c8ef;
+
+  --md-primary-fg-color: #31377a;
+  --md-primary-fg-color--light: #4242cd;
+  --md-primary-fg-color--dark: #19206b;
+  --md-accent-fg-color: #2f7fe0;
+
+  --wysee-shell-bg: #eef1ff;
+  --wysee-shell-border: #c4c8ef;
+  --wysee-shell-border-strong: #7070bb;
+  --wysee-header-text: #f7f8ff;
+  --wysee-link: #2f7fe0;
+  --wysee-link-hover: #1f6fd4;
+  --wysee-active: #19206b;
+  --wysee-search-bg: #eef1ff;
+  --wysee-search-bg-focus: #f8f9ff;
+  --wysee-search-text: #1c2230;
+}
+
+/* DARK */
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #0d1117;
+  --md-default-fg-color: #dde5f2;
+  --md-default-fg-color--light: #aeb8ca;
+  --md-default-fg-color--lighter: #8c97b0;
+  --md-default-fg-color--lightest: #2d3559;
+
+  --md-primary-fg-color: #11172a;
+  --md-primary-fg-color--light: #1b2550;
+  --md-primary-fg-color--dark: #090c12;
+  --md-accent-fg-color: #67b3ff;
+
+  --wysee-shell-bg: #101521;
+  --wysee-shell-border: #2d3559;
+  --wysee-shell-border-strong: #7070bb;
+  --wysee-header-text: #e8ecff;
+  --wysee-link: #67b3ff;
+  --wysee-link-hover: #94c9ff;
+  --wysee-active: #dce1ff;
+  --wysee-search-bg: #121826;
+  --wysee-search-bg-focus: #161d2e;
+  --wysee-search-text: #dde5f2;
+}
+
+body,
+.md-header,
+.md-tabs,
+.md-nav,
+.md-search,
+.md-typeset,
+button,
+input,
+select,
+textarea {
+  font-family: var(--wysee-ui-font);
+}
+
+code,
+kbd,
+pre,
+.md-typeset code {
+  font-family: var(--wysee-code-font);
+}
+
+.md-header {
+  background: var(--md-primary-fg-color);
+  color: var(--wysee-header-text);
+  border-bottom: 1px solid var(--wysee-shell-border-strong);
+}
+
+.md-header__title,
+.md-header__topic,
+.md-header__button,
+.md-header__source {
+  color: var(--wysee-header-text);
+}
+
+.md-main,
+.md-main__inner,
+.md-content,
+.md-sidebar,
+.md-sidebar__scrollwrap,
+.md-sidebar__inner {
+  background: var(--md-default-bg-color);
+}
+
+.md-search__form {
+  background: var(--wysee-search-bg);
+  border: 1px solid var(--wysee-shell-border);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.md-search__form:hover,
+.md-search__form:focus-within {
+  background: var(--wysee-search-bg-focus);
+  border-color: var(--wysee-shell-border-strong);
+}
+
+.md-search__input,
+.md-search__icon,
+.md-search__output,
+.md-search__scrollwrap {
+  color: var(--wysee-search-text);
+}
+
+.md-search__input::placeholder {
+  color: var(--md-default-fg-color--light);
+}
+
+.md-sidebar--primary .md-sidebar__scrollwrap,
+.md-sidebar--secondary .md-sidebar__scrollwrap {
+  background: var(--wysee-shell-bg);
+  border: 1px solid var(--wysee-shell-border);
+  border-radius: 12px;
+}
+
+/* LEFT NAV LOGO BLOCK */
+.md-sidebar--primary .md-sidebar__inner {
+  padding-top: 0.5rem;
+}
+
+.md-sidebar--primary .md-nav--primary::before {
+  content: "";
+  display: block;
+  width: 192px;
+  height: 192px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 0;
+  margin-bottom: .8rem;
+  background-image: url("../assets/logo192.png");
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: contain;
+  border-bottom: 1px solid var(--wysee-shell-border);
+  padding-bottom: 0.5rem;
+}
+
+/* NAV */
+.md-nav__title {
+  color: var(--md-default-fg-color--light);
+  font-weight: 700;
+}
+
+.md-nav__link {
+  color: var(--md-default-fg-color);
+  border-radius: 8px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.md-nav__link:hover {
+  color: var(--wysee-link-hover);
+  background: color-mix(in srgb, var(--wysee-shell-border) 16%, transparent);
+}
+
+.md-nav__link--active,
+.md-nav__link:focus {
+  color: var(--wysee-active);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--wysee-shell-border-strong) 16%, transparent);
+}
+
+/* TOC */
+.md-sidebar--secondary .md-nav__link {
+  color: var(--md-default-fg-color);
+  border-left: 2px solid transparent;
+  padding-left: 0.7rem;
+  margin-left: -0.7rem;
+  border-radius: 0 8px 8px 0;
+}
+
+.md-sidebar--secondary .md-nav__link:hover {
+  color: var(--wysee-link-hover);
+  background: color-mix(in srgb, var(--wysee-shell-border) 16%, transparent);
+}
+
+.md-sidebar--secondary .md-nav__link--active {
+  color: var(--wysee-active);
+  border-left-color: var(--md-accent-fg-color);
+  background: color-mix(in srgb, var(--wysee-shell-border-strong) 18%, transparent);
+  font-weight: 700;
+}
