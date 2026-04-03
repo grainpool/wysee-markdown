@@ -1,6 +1,7 @@
 ---
 site_name: Wysee Markdown
 site_description: Visual Markdown editing, rendered diff, print/PDF, and approval workflows for VS Code and VSCodium.
+site_url: https://docs.grainpoolholdings.com/open-source-projects/
 
 theme:
   logo: assets/logogp.png
