@@ -2,7 +2,7 @@
 
 WYSIWYG Markdown editor with print, rendered diff, intelligent change control, and advanced authoring features — for VS Code and VSCodium.
 
-📖 **[Full documentation →](https://docs.grainpoolholdings.com/open-source-projects/wysee.html)**
+📖 **[Access the full documentation →](https://docs.grainpoolholdings.com/open-source-projects/wysee.html)**
 
 ## Features
 
